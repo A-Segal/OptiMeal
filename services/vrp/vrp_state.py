@@ -6,6 +6,8 @@ VRP State Module — Grouped Delivery with Time Constraints
 הקיבולת נבדקת לכל קבוצה בנפרד — אחרי שמסיימים קבוצה, הקיבולת מתפנה.
 """
 
+import math
+
 # ---------------------------------------------------------------------------
 # קיבולות רכב — טבלה קבועה לפי סוג הרכב
 # ---------------------------------------------------------------------------
@@ -46,6 +48,68 @@ def get_group_families(group: dict) -> int:
 def get_group_meals(group: dict) -> int:
     """מחזיר את מספר המנות הכולל בקבוצה."""
     return group.get("total_meals", 0)
+
+
+def get_group_service_time(group: dict) -> float:
+    """מחזיר את זמן השירות של הקבוצה בדקות."""
+    return get_group_families(group) * SERVICE_TIME_PER_FAMILY
+
+
+def _distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Computes a simple haversine distance for recipient ordering."""
+    radius = 6371.0
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lng = math.radians(lng2 - lng1)
+
+    a = (
+        math.sin(delta_lat / 2) ** 2
+        + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lng / 2) ** 2
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return radius * c
+
+
+def get_ordered_group_recipients(group: dict, from_location: dict | None = None) -> list[tuple]:
+    """
+    Orders recipients within a delivery group by proximity to the current location
+    so the route visits addresses in a more realistic geographic sequence.
+    """
+    assignment_ids = group.get("assignment_ids", [])
+    recipients = group.get("recipients_locations", [])
+
+    if not recipients:
+        return []
+
+    pairs = list(zip(assignment_ids, recipients))
+    if len(pairs) <= 1:
+        return pairs
+
+    start_location = from_location or {
+        "lat": group.get("center_lat", 0.0),
+        "lng": group.get("center_lng", 0.0),
+    }
+
+    remaining = list(pairs)
+    ordered = []
+    current_location = start_location
+
+    while remaining:
+        best_index = min(
+            range(len(remaining)),
+            key=lambda idx: _distance_km(
+                current_location["lat"],
+                current_location["lng"],
+                remaining[idx][1]["lat"],
+                remaining[idx][1]["lng"],
+            ),
+        )
+        selected = remaining.pop(best_index)
+        ordered.append(selected)
+        current_location = selected[1]
+
+    return ordered
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +153,7 @@ def is_feasible(
     families = get_group_families(group)
 
     # זמן שירות = זמן עיבוד לקבוצה
-    service_time = families * SERVICE_TIME_PER_FAMILY
+    service_time = get_group_service_time(group)
 
     new_time = state["current_time"] + travel_time + service_time
 
@@ -118,14 +182,13 @@ def apply_move(state: dict, group: dict, travel_time: float) -> dict:
     from copy import deepcopy
 
     families = get_group_families(group)
-    service_time = families * SERVICE_TIME_PER_FAMILY
+    service_time = get_group_service_time(group)
 
     ns = deepcopy(state)
 
-    # עדכון מיקום — אחרי סיום הקבוצה, המתנדב נמצא במיקום הנזקק האחרון
-    recipients = group.get("recipients_locations", [])
-    if recipients:
-        last_recipient = recipients[-1]
+    ordered_recipients = get_ordered_group_recipients(group, state["current_location"])
+    if ordered_recipients:
+        last_recipient = ordered_recipients[-1][1]
         ns["current_location"] = {
             "lat": last_recipient["lat"],
             "lng": last_recipient["lng"],
@@ -170,3 +233,4 @@ def state_key(state: dict) -> str:
     lat_key = round(loc["lat"], 4)
     lng_key = round(loc["lng"], 4)
     return f"{visited}|{lat_key}|{lng_key}"
+

@@ -164,7 +164,8 @@ class DeliveryAssignmentRepository:
                     "center_lng": float(center.location_lng),
                     "recipients_locations": [],
                     "assignment_ids": [],
-                    "total_meals": 0
+                    "total_meals": 0,
+                    "group_families": 0
                 }
 
             groups[key]["recipients_locations"].append({
@@ -174,5 +175,6 @@ class DeliveryAssignmentRepository:
 
             groups[key]["assignment_ids"].append(r.id)
             groups[key]["total_meals"] += r.amount_of_meals or 0
+            groups[key]["group_families"] += 1
 
         return list(groups.values())

@@ -1,5 +1,5 @@
 from services.vrp.solver import solve
-from services.vrp.vrp_state import get_group_families, VEHICLE_CAPACITY
+from services.vrp.vrp_state import get_group_families, VEHICLE_CAPACITY, get_ordered_group_recipients
 from services.utils.googleMaps import (
     geocode_address,
     travel_time_between_points
@@ -17,6 +17,7 @@ def build_detailed_route(route, groups, start_location):
     group_map = {g["center_id"]: g for g in groups}
 
     full_route = []
+    current_location = start_location
 
     # START POINT
     full_route.append({
@@ -46,11 +47,9 @@ def build_detailed_route(route, groups, start_location):
         })
         step += 1
 
-        # RECIPIENTS (ordered inside group)
-        for aid, loc in zip(
-            group.get("assignment_ids", []),
-            group.get("recipients_locations", [])
-        ):
+        # RECIPIENTS (ordered inside group by proximity)
+        ordered_recipients = get_ordered_group_recipients(group, current_location)
+        for aid, loc in ordered_recipients:
             full_route.append({
                 "step": step,
                 "type": "recipient",
@@ -60,6 +59,7 @@ def build_detailed_route(route, groups, start_location):
                 "lng": loc["lng"]
             })
             step += 1
+            current_location = loc
 
     return full_route
 
