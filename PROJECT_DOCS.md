@@ -286,6 +286,72 @@ python main.py
 
 ---
 
+---
+
+## 🖥 Frontend Structure
+
+The frontend is a **React + TypeScript + Vite** application located in `client last/`.
+
+### Pages
+
+| Route | Component | Description |
+|-------|-----------|-------------|
+| `/` | `Home.tsx` | Landing page — red & white Ezer Mitzion brand, hero section, "How It Works", cards, stats |
+| `/login` | `Login.tsx` | Login form — authenticates volunteers, recipients, and distribution centers |
+| `/RecipientSignUp` | `RecipientSignUp.tsx` | Recipient registration with Google Maps address autocomplete |
+| `/DistributionCenterSignUp` | `DistributionCenterSignUp.tsx` | Distribution center registration |
+| `/volunteerSignUp` | `VolunteerSignUp.tsx` | Volunteer registration — selects vehicle type (1-5) |
+| `/volunteer-home` | `VolunteerHome.tsx` | **Volunteer dashboard** — send delivery request, view optimized route with Google Maps |
+| `/recipient-home` | `RecipientHome.tsx` | Recipient welcome page |
+| `/dc-home` | `DCHome.tsx` | Distribution center welcome page |
+
+### VolunteerHome — Smart Route System
+The volunteer dashboard is the most complex page:
+1. **Request form**: Address input (Google Autocomplete) + available time
+2. **API call**: `POST /api/volunteer_request/run_route/<id>`
+3. **Smart loading**: Shows "computing..." with algorithm description
+4. **Route display**: Color-coded timeline (🟢 start → 🔵 pickup → 🔴 deliver)
+5. **Google Map**: Full interactive map with markers, polylines, info windows, and legend
+6. **Step details**: Each step shows the center name, recipient name, meal count, and action type
+
+### Key Client Files
+
+| File | Purpose |
+|------|---------|
+| `src/routs.tsx` | React Router configuration |
+| `src/config.ts` | API base URL (`/api`) |
+| `src/server/*.tsx` | API call modules (axios) |
+| `src/model/*.ts` | TypeScript types |
+| `src/style/*.css` | Stylesheets — red & white brand (#C8102E) |
+| `src/components/signUp/*.tsx` | Registration forms |
+| `src/components/VolunteerHome.tsx` | Main volunteer dashboard |
+
+### Ezer Mitzion Brand
+
+All pages use the **red & white** brand palette:
+- Primary: `#C8102E` (deep crimson)
+- Bright: `#E6344A`
+- Dark: `#8B0000`
+- Background: `#FFF5F5` (cream with red undertone)
+- The Ezer Mitzion logo (`public/1.png`) appears on every page
+
+---
+
+## 🔄 Recent Updates (July 2026)
+
+### Frontend
+- **VolunteerHome rebuilt**: Full dashboard with route request, Google Maps, and color-coded timeline
+- **All pages branded**: Red & white palette applied consistently to Home, Login, all 3 SignUp forms, DCHome, RecipientHome
+- **Ezer Mitzion logo** added to every page header
+- **"How It Works" section** added to Home page — 3-step visual explanation
+- **Smart algorithm messaging**: "State Space Search" badge, loading explanations
+- **Vehicle type dropdown**: Now shows all 5 types (אופנוע/Mini/Private/Station/מסחרי) with correct DB values
+
+### Backend
+- **`build_groups()` enriched**: Now returns `center_name`, `recipient_names`, `recipient_meals` per group
+- **`build_detailed_route()` enriched**: Each step now has `label` (name), `detail` (description), `meals` (count), `action` (pickup/deliver/start)
+- **Frontend API**: `VolunteerRequest.tsx` created — calls `POST /volunteer_request/run_route/<id>`
+
+---
+
 *Last updated: July 2026 | Project: SmartPath Server*
-
-

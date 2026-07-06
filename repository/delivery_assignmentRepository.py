@@ -162,7 +162,10 @@ class DeliveryAssignmentRepository:
                     "center_id": key,
                     "center_lat": float(center.location_lat),
                     "center_lng": float(center.location_lng),
+                    "center_name": center.fname or f"מרכז חלוקה #{key}",
                     "recipients_locations": [],
+                    "recipient_names": [],
+                    "recipient_meals": [],
                     "assignment_ids": [],
                     "total_meals": 0,
                     "group_families": 0
@@ -172,6 +175,11 @@ class DeliveryAssignmentRepository:
                 "lat": float(recipient.location_lat),
                 "lng": float(recipient.location_lng)
             })
+
+            # ⭐ שמות וכמויות — המתנדב יודע למי וכמה
+            recipient_full_name = f"{recipient.fname or ''} {recipient.lname or ''}".strip() or f"משפחה #{recipient.id}"
+            groups[key]["recipient_names"].append(recipient_full_name)
+            groups[key]["recipient_meals"].append(r.amount_of_meals or 0)
 
             groups[key]["assignment_ids"].append(r.id)
             groups[key]["total_meals"] += r.amount_of_meals or 0

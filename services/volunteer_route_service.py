@@ -14,19 +14,29 @@ def get_capacity(vehicle_type):
 # FLATTEN ROUTE FOR REACT
 # =========================
 def build_detailed_route(route, groups, start_location):
+    """
+    בונה מסלול מפורט עם כל המידע שהמתנדב צריך:
+    - שמות נזקקים, כמויות מנות
+    - שמות מרכזי חלוקה
+    - action: pickup / deliver
+    """
     group_map = {g["center_id"]: g for g in groups}
 
     full_route = []
     current_location = start_location
 
-    # START POINT
+    # ── START ──
     full_route.append({
         "step": 0,
         "type": "start",
+        "action": "start",
         "center_id": None,
         "assignment_id": None,
         "lat": start_location["lat"],
-        "lng": start_location["lng"]
+        "lng": start_location["lng"],
+        "label": "נקודת התחלה",
+        "detail": "",
+        "meals": 0,
     })
 
     step = 1
@@ -36,27 +46,48 @@ def build_detailed_route(route, groups, start_location):
         if not group:
             continue
 
-        # CENTER
+        center_name = group.get("center_name", f"מרכז חלוקה #{center_id}")
+        center_total_meals = group.get("total_meals", 0)
+
+        # ── CENTER (איסוף) ──
         full_route.append({
             "step": step,
             "type": "center",
+            "action": "pickup",
             "center_id": center_id,
             "assignment_id": None,
             "lat": group["center_lat"],
-            "lng": group["center_lng"]
+            "lng": group["center_lng"],
+            "label": center_name,
+            "detail": f"איסוף — {center_total_meals} מנות",
+            "meals": center_total_meals,
         })
         step += 1
 
-        # RECIPIENTS (ordered inside group by proximity)
+        # ── RECIPIENTS (חלוקה) ──
         ordered_recipients = get_ordered_group_recipients(group, current_location)
+        recipient_names = group.get("recipient_names", [])
+        recipient_meals = group.get("recipient_meals", [])
+        # map: assignment_id → index
+        assignment_ids = group.get("assignment_ids", [])
+
         for aid, loc in ordered_recipients:
+            # find index for this assignment_id
+            idx = assignment_ids.index(aid) if aid in assignment_ids else -1
+            recip_name = recipient_names[idx] if 0 <= idx < len(recipient_names) else f"משפחה #{aid}"
+            recip_meals = recipient_meals[idx] if 0 <= idx < len(recipient_meals) else 0
+
             full_route.append({
                 "step": step,
                 "type": "recipient",
+                "action": "deliver",
                 "center_id": center_id,
                 "assignment_id": aid,
                 "lat": loc["lat"],
-                "lng": loc["lng"]
+                "lng": loc["lng"],
+                "label": recip_name,
+                "detail": f"חלוקה — {recip_meals} מנות",
+                "meals": recip_meals,
             })
             step += 1
             current_location = loc

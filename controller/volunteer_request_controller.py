@@ -21,7 +21,6 @@ volunteer_request_bp = Blueprint(
 
 
 
-
 # ==================== יצירת בקשה (POST) ====================
 @volunteer_request_bp.route('/run_route/<int:volunteer_id>', methods=['POST'])
 def run_route(volunteer_id):
