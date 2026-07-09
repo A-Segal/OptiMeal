@@ -94,7 +94,30 @@ def travel_time_between_points(lat1, lng1, lat2, lng2, mode="driving"):
     return result
 
 # =========================
-# פונקציה 4: קבלת אזור/יישוב/מחוז
+# פונקציה 4: lat,lng → כתובת (Reverse Geocoding)
+# =========================
+_reverse_cache: dict[tuple, str] = {}
+
+def reverse_geocode(lat, lng):
+    """מקבלת lat,lng — מחזירה מחרוזת כתובת בעברית (עם cache)."""
+    key = (round(float(lat), 5), round(float(lng), 5))
+    if key in _reverse_cache:
+        return _reverse_cache[key]
+    url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={API_KEY}&language=iw"
+    try:
+        data = requests.get(url, timeout=5).json()
+        if data.get("status") == "OK" and data.get("results"):
+            addr = data["results"][0].get("formatted_address", "")
+            _reverse_cache[key] = addr
+            return addr
+    except:
+        pass
+    _reverse_cache[key] = ""
+    return ""
+
+
+# =========================
+# פונקציה 5: קבלת אזור/יישוב/מחוז
 # =========================
 def get_region_from_address(address: str):
     """

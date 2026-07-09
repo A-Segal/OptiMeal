@@ -1,31 +1,34 @@
 """
-VRP State Module — Grouped Delivery with Time Constraints
+VRP State Module — Grouped Delivery with Cumulative Meal Capacity
 
 מייצג מצב בחיפוש, בדיקות feasibility, וחישובי קבוצות.
-כל קבוצה = מרכז חלוקה + הנזקקים המשויכים אליו (1-2 נזקקים).
-הקיבולת נבדקת לכל קבוצה בנפרד — אחרי שמסיימים קבוצה, הקיבולת מתפנה.
-"""
+כל קבוצה = מרכז חלוקה + הנזקקים המשויכים אליו.
 
+הקיבולת נבדקת באופן מצטבר על כל המסלול:
+הרכב יכול לשאת עד max_capacity מנות בסה"כ — לא משנה מאיזה מרכז.
+"""
 import math
+from copy import deepcopy
+
 
 # ---------------------------------------------------------------------------
-# קיבולות רכב — טבלה קבועה לפי סוג הרכב
+# קיבולות רכב — טבלה קבועה לפי סוג הרכב (במנות)
 # ---------------------------------------------------------------------------
 VEHICLE_CAPACITY = {
-    1: 1,   # אופנוע
-    2: 3,   # Mini
-    3: 6,   # Private
-    4: 10,  # Station
-    5: 20,  # Mischari
+    1: 20,    # אופנוע
+    2: 60,    # Mini
+    3: 120,   # Private
+    4: 250,   # Station
+    5: 500,   # מסחרי
 }
 
-# זמן עיבוד פנימי של קבוצה (דקות) — איסוף מהמרכז + חלוקה לנזקקים
+# זמן עיבוד פנימי לקבוצה (דקות) — איסוף מהמרכז + חלוקה לנזקקים
 SERVICE_TIME_PER_FAMILY = 5  # דקות למשפחה
 
 
 def get_vehicle_capacity(vehicle_type: int) -> int:
-    """מחזיר קיבולת רכב (מספר משפחות מקסימלי לאיסוף) לפי סוג."""
-    return VEHICLE_CAPACITY.get(vehicle_type, 3)
+    """מחזיר קיבולת רכב (מספר מנות מקסימלי) לפי סוג."""
+    return VEHICLE_CAPACITY.get(vehicle_type, 120)  # default = פרטי
 
 
 # ---------------------------------------------------------------------------
@@ -34,47 +37,48 @@ def get_vehicle_capacity(vehicle_type: int) -> int:
 def get_group_families(group: dict) -> int:
     """
     מחזיר את מספר המשפחות בקבוצה.
-    משתמש ב־group_families אם קיים, אחרת סופר recipients_locations.
+    משתמש ב-group_families אם קיים, אחרת נופל לאורך רשימת הנמענים.
     """
-    if "group_families" in group and group["group_families"]:
+    if "group_families" in group and group["group_families"] is not None:
         return group["group_families"]
-
-    if "recipients_locations" in group:
-        return len(group["recipients_locations"])
-
-    return group.get("total_meals", 0)
+    recipients = group.get("recipients_locations", [])
+    if recipients:
+        return len(recipients)
+    return group.get("total_meals", 0)  # fallback
 
 
 def get_group_meals(group: dict) -> int:
-    """מחזיר את מספר המנות הכולל בקבוצה."""
+    """מחזיר את סך המנות בקבוצה."""
     return group.get("total_meals", 0)
 
 
 def get_group_service_time(group: dict) -> float:
-    """מחזיר את זמן השירות של הקבוצה בדקות."""
+    """זמן שירות לקבוצה: 5 דקות למשפחה."""
     return get_group_families(group) * SERVICE_TIME_PER_FAMILY
 
 
+# ---------------------------------------------------------------------------
+# Haversine — מרחק בק"מ
+# ---------------------------------------------------------------------------
 def _distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """Computes a simple haversine distance for recipient ordering."""
-    radius = 6371.0
+    R = 6371.0
     lat1_rad = math.radians(lat1)
     lat2_rad = math.radians(lat2)
     delta_lat = math.radians(lat2 - lat1)
     delta_lng = math.radians(lng2 - lng1)
 
-    a = (
-        math.sin(delta_lat / 2) ** 2
-        + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lng / 2) ** 2
-    )
+    a = math.sin(delta_lat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lng / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return radius * c
+    return R * c
 
 
-def get_ordered_group_recipients(group: dict, from_location: dict | None = None) -> list[tuple]:
+# ---------------------------------------------------------------------------
+# סידור נמענים בתוך קבוצה לפי קרבה (Nearest Neighbor)
+# ---------------------------------------------------------------------------
+def get_ordered_group_recipients(group: dict, from_location: dict = None):
     """
-    Orders recipients within a delivery group by proximity to the current location
-    so the route visits addresses in a more realistic geographic sequence.
+    סידור נמענים בתוך קבוצת משלוח לפי קרבה למיקום הנוכחי,
+    כך שהמסלול יעבור בכתובות בסדר גיאוגרפי הגיוני.
     """
     assignment_ids = group.get("assignment_ids", [])
     recipients = group.get("recipients_locations", [])
@@ -121,16 +125,14 @@ def create_initial_state(
     max_capacity: int,
     available_time: float,
 ) -> dict:
-    """
-    יוצר מצב התחלתי עבור החיפוש.
-    """
+    """יוצר מצב התחלתי עבור החיפוש."""
     return {
         "current_location": start_location,
         "current_time": 0.0,
         "remaining_groups": groups,
         "visited_groups": set(),
-        "max_capacity": max_capacity,
-        "total_deliveries": 0,
+        "max_capacity": max_capacity,       # קיבולת רכב במנות
+        "total_meals": 0,                    # סה"כ מנות מצטבר במסלול
         "route": [],
         "available_time": available_time,
     }
@@ -145,28 +147,29 @@ def is_feasible(
     travel_time: float,
 ) -> bool:
     """
-    בודק האם המעבר לקבוצה הנתונה חוקי:
-    1. זמן כולל (כולל שירות) לא חורג מהזמן הפנוי
-    2. מספר המשפחות בקבוצה ≤ קיבולת הרכב
-    3. הקבוצה עדיין לא בוצעה
+    בודק אם המעבר לקבוצה חוקי:
+    1. לא חורג מהזמן הפנוי
+    2. לא חורג מקיבולת המנות המצטברת של הרכב
+    3. הקבוצה טרם בוקרה
     """
-    families = get_group_families(group)
-
-    # זמן שירות = זמן עיבוד לקבוצה
     service_time = get_group_service_time(group)
+    group_meals = get_group_meals(group)
+    group_families = get_group_families(group)
 
-    new_time = state["current_time"] + travel_time + service_time
-
-    # 1. מגבלת זמן
-    if new_time > state["available_time"]:
+    # בדיקת זמן
+    if state["current_time"] + travel_time + service_time > state["available_time"]:
         return False
 
-    # 2. קיבולת — בדיקה לכל קבוצה בנפרד
-    if families > state["max_capacity"]:
+    # בדיקה מצטברת של מנות — הרכב יכול לשאת עד max_capacity מנות בסה"כ
+    if state["total_meals"] + group_meals > state["max_capacity"]:
         return False
 
-    # 3. הקבוצה לא בוצעה כבר
+    # בדיקה שהקבוצה לא בוקרה כבר
     if group["center_id"] in state["visited_groups"]:
+        return False
+
+    # בדיקה שיש נמענים בקבוצה
+    if group_families == 0:
         return False
 
     return True
@@ -176,16 +179,14 @@ def is_feasible(
 # החלת מעבר — יוצר מצב חדש אחרי הוספת קבוצה
 # ---------------------------------------------------------------------------
 def apply_move(state: dict, group: dict, travel_time: float) -> dict:
-    """
-    מחזיר מצב חדש אחרי הוספת הקבוצה למסלול.
-    """
-    from copy import deepcopy
-
+    """מחזיר מצב חדש אחרי הוספת הקבוצה למסלול."""
     families = get_group_families(group)
+    group_meals = get_group_meals(group)
     service_time = get_group_service_time(group)
 
     ns = deepcopy(state)
 
+    # עדכון מיקום — אחרי הנמען האחרון בקבוצה
     ordered_recipients = get_ordered_group_recipients(group, state["current_location"])
     if ordered_recipients:
         last_recipient = ordered_recipients[-1][1]
@@ -207,8 +208,8 @@ def apply_move(state: dict, group: dict, travel_time: float) -> dict:
     ns["route"] = ns["route"] + [group["center_id"]]
     ns["visited_groups"] = ns["visited_groups"] | {group["center_id"]}
 
-    # עדכון deliveries
-    ns["total_deliveries"] += families
+    # עדכון מנות מצטבר
+    ns["total_meals"] += group_meals
 
     # הסרת הקבוצה מהרשימה הנותרת
     ns["remaining_groups"] = [
@@ -220,17 +221,14 @@ def apply_move(state: dict, group: dict, travel_time: float) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# מפתח ייחודי למצב — עבור pruning
+# מפתח ייחודי למצב עבור pruning
 # ---------------------------------------------------------------------------
 def state_key(state: dict) -> str:
     """
-    מחזיר מפתח ייחודי למצב עבור pruning.
-    מבוסס על סט הקבוצות שבוצעו והמיקום הנוכחי.
+    מחזיר מפתח ייחודי למצב — בשימוש לגיזום במנוע החיפוש.
+    מבוסס על קבוצת ה-visited_groups + מיקום נוכחי (מעוגל ל-4 ספרות).
     """
     visited = frozenset(state["visited_groups"])
-    loc = state["current_location"]
-    # מעגל ל-4 ספרות כדי לקבץ מיקומים קרובים
-    lat_key = round(loc["lat"], 4)
-    lng_key = round(loc["lng"], 4)
-    return f"{visited}|{lat_key}|{lng_key}"
-
+    lat = state["current_location"]["lat"]
+    lng = state["current_location"]["lng"]
+    return f"{visited}|{round(lat, 4)}|{round(lng, 4)}"

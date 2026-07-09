@@ -33,6 +33,10 @@ class StaffMemberRepository:
     def get_staff_member(self, staffID: int) -> StaffMember | None:
         return self.db.query(StaffMember).filter(StaffMember.id == staffID).first()
 
+    def get_by_username(self, username: str) -> StaffMember | None:
+        """מוצא איש צוות לפי שם משתמש."""
+        return self.db.query(StaffMember).filter(StaffMember.username == username).first()
+
     def get_all_staff_members(self) -> list[StaffMember]:
         return self.db.query(StaffMember).all()
 

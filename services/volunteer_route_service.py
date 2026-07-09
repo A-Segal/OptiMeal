@@ -1,13 +1,15 @@
 from services.vrp.solver import solve
-from services.vrp.vrp_state import get_group_families, VEHICLE_CAPACITY, get_ordered_group_recipients
+from services.vrp.vrp_state import get_group_families, get_group_meals, VEHICLE_CAPACITY, get_ordered_group_recipients
 from services.utils.googleMaps import (
     geocode_address,
-    travel_time_between_points
+    travel_time_between_points,
+    reverse_geocode
 )
 
 
 def get_capacity(vehicle_type):
-    return VEHICLE_CAPACITY.get(vehicle_type, 3)
+    """מחזיר קיבולת רכב במנות לפי סוג הרכב (1-5)."""
+    return VEHICLE_CAPACITY.get(vehicle_type, 120)  # default = פרטי
 
 
 # =========================
@@ -26,6 +28,7 @@ def build_detailed_route(route, groups, start_location):
     current_location = start_location
 
     # ── START ──
+    start_addr = reverse_geocode(start_location["lat"], start_location["lng"])
     full_route.append({
         "step": 0,
         "type": "start",
@@ -35,7 +38,8 @@ def build_detailed_route(route, groups, start_location):
         "lat": start_location["lat"],
         "lng": start_location["lng"],
         "label": "נקודת התחלה",
-        "detail": "",
+        "detail": start_addr or "",
+        "address": start_addr or "",
         "meals": 0,
     })
 
@@ -48,6 +52,7 @@ def build_detailed_route(route, groups, start_location):
 
         center_name = group.get("center_name", f"מרכז חלוקה #{center_id}")
         center_total_meals = group.get("total_meals", 0)
+        center_addr = reverse_geocode(group["center_lat"], group["center_lng"])
 
         # ── CENTER (איסוף) ──
         full_route.append({
@@ -60,6 +65,7 @@ def build_detailed_route(route, groups, start_location):
             "lng": group["center_lng"],
             "label": center_name,
             "detail": f"איסוף — {center_total_meals} מנות",
+            "address": center_addr or "",
             "meals": center_total_meals,
         })
         step += 1
@@ -68,14 +74,13 @@ def build_detailed_route(route, groups, start_location):
         ordered_recipients = get_ordered_group_recipients(group, current_location)
         recipient_names = group.get("recipient_names", [])
         recipient_meals = group.get("recipient_meals", [])
-        # map: assignment_id → index
         assignment_ids = group.get("assignment_ids", [])
 
         for aid, loc in ordered_recipients:
-            # find index for this assignment_id
             idx = assignment_ids.index(aid) if aid in assignment_ids else -1
             recip_name = recipient_names[idx] if 0 <= idx < len(recipient_names) else f"משפחה #{aid}"
             recip_meals = recipient_meals[idx] if 0 <= idx < len(recipient_meals) else 0
+            recip_addr = reverse_geocode(loc["lat"], loc["lng"])
 
             full_route.append({
                 "step": step,
@@ -87,6 +92,7 @@ def build_detailed_route(route, groups, start_location):
                 "lng": loc["lng"],
                 "label": recip_name,
                 "detail": f"חלוקה — {recip_meals} מנות",
+                "address": recip_addr or "",
                 "meals": recip_meals,
             })
             step += 1
@@ -149,20 +155,24 @@ def run_volunteer_route(
         and g.get("center_lng")
     ]
 
+    # 4. VEHICLE CAPACITY — במנות
+    vehicle = getattr(volunteer, "vehicle", None)
+    vehicle_type = getattr(vehicle, "capacity", 3) if vehicle else 3
+    vehicle_capacity = get_capacity(vehicle_type)  # קיבולת במנות
+
     if not groups:
         return {
             "volunteer_id": volunteer.id,
             "start_location": start_location,
             "route": [],
             "detailed_route": [],
-            "message": "no groups available"
+            "total_meals": 0,
+            "visited_count": 0,
+            "final_time_minutes": 0,
+            "vehicle_capacity": vehicle_capacity,
+            "groups_count": 0,
+            "message": "לא נמצאו משלוחים זמינים כרגע. נסה שוב מאוחר יותר."
         }
-
-    # 4. VEHICLE CAPACITY
-    vehicle = getattr(volunteer, "vehicle", None)
-    # vehicle.capacity = סוג הרכב (1-5)
-    vehicle_type = getattr(vehicle, "capacity", 3) if vehicle else 3
-    vehicle_capacity = get_capacity(vehicle_type)
 
     # 5. AVAILABLE TIME — המרה משעות לדקות
     if available_time is not None:
@@ -171,6 +181,7 @@ def run_volunteer_route(
         available_time_minutes = 999999  # אין הגבלה
 
     print(f"Available time: {available_time_minutes} min (from {available_time} hours)")
+    print(f"Vehicle capacity: {vehicle_capacity} meals (type {vehicle_type})")
 
     # 6. SOLVER
     result = solve(
@@ -192,7 +203,12 @@ def run_volunteer_route(
             "start_location": start_location,
             "route": [],
             "detailed_route": [],
-            "message": "no feasible route found"
+            "total_meals": 0,
+            "visited_count": 0,
+            "final_time_minutes": 0,
+            "vehicle_capacity": vehicle_capacity,
+            "groups_count": len(groups),
+            "message": "לא נמצא מסלול שמתאים לזמן הפנוי ולקיבולת הרכב. נסה להגדיל את הזמן הפנוי."
         }
 
     # 7. BUILD UI ROUTE
@@ -216,8 +232,8 @@ def run_volunteer_route(
         "route": route,
         "detailed_route": detailed_route,
         "groups_count": len(groups),
-        "vehicle_capacity": vehicle_capacity,
-        "total_deliveries": result.get("total_deliveries", 0),
+        "vehicle_capacity": vehicle_capacity,          # קיבולת במנות
+        "total_meals": result.get("total_meals", 0),   # סה"כ מנות במסלול
         "final_time_minutes": result.get("final_time", 0),
         "visited_count": len(route)
     }

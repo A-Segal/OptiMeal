@@ -4,6 +4,7 @@ from db_connection import SessionLocal
 from repository.VolunteerRepository import VolunteerRepository
 from repository.recipientRepository import RecipientRepository
 from repository.distribution_centerRepository import DistributionCenterRepository
+from repository.staff_memberRepository import StaffMemberRepository
 
 auth_bp = Blueprint('auth_bp', __name__, url_prefix='/auth')
 
@@ -50,6 +51,30 @@ def login():
                 "id": dc.id,
                 "role": "distribution_center",
                 "username": dc.username
+            }), 200
+
+        # ===================== STAFF MEMBER =====================
+        staff_repo = StaffMemberRepository(db_session)
+        staff = staff_repo.get_by_username(username)
+        print(f"[DEBUG STAFF] username='{username}', found={staff is not None}, PermissionID={getattr(staff, 'PermissionID', 'N/A')}")
+        if staff:
+            # בדיקת סיסמה
+            from services.utils.auth_utils import verify_password
+            if not verify_password(password, staff.password):
+                return jsonify({"message": "Invalid password"}), 401
+
+            # PermissionID=1 → director, כל השאר → מזכירות
+            permission_type = "director" if staff.PermissionID == 1 else "מזכירות"
+
+            return jsonify({
+                "id": staff.id,
+                "fname": staff.fname,
+                "lname": staff.lname,
+                "role": "staff",
+                "username": staff.username,
+                "permission": permission_type,
+                "mail": staff.mail or "",
+                "phone": staff.phone or ""
             }), 200
 
         # ===================== NOT FOUND =====================

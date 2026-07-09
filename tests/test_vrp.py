@@ -10,8 +10,8 @@ class VrpStateTests(unittest.TestCase):
             "current_time": 0.0,
             "remaining_groups": [],
             "visited_groups": set(),
-            "max_capacity": 10,
-            "total_deliveries": 0,
+            "max_capacity": 500,   # קיבולת במנות
+            "total_meals": 0,      # סה"כ מנות מצטבר
             "route": [],
             "available_time": 1000.0,
         }

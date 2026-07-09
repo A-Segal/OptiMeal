@@ -1,9 +1,13 @@
 from flask import Blueprint, request, jsonify
 from repository.delivery_assignmentRepository import DeliveryAssignmentRepository
+from repository.distribution_centerRepository import DistributionCenterRepository
+from repository.recipientRepository import RecipientRepository
+from repository.recipient_request_repository import RecipientRequestRepository
 from db_connection import SessionLocal
-from dto.delivery_assignmentDTO import DeliveryAssignmentDTO  # נניח שיש קובץ DTO
+from dto.delivery_assignmentDTO import DeliveryAssignmentDTO
 from typing import List
-from services.delivery_assignment_service import create_assignments_from_matching
+from datetime import date
+from services.delivery_assignment_service import create_assignments_from_matching_and_get_results
 
 
 # Blueprint עבור DeliveryAssignment
@@ -11,13 +15,34 @@ delivery_assignment_bp = Blueprint('delivery_assignment_bp', __name__, url_prefi
 @delivery_assignment_bp.route('/run_matching', methods=['POST'])
 def run_matching_and_create_assignments():
     """
-    מפעיל את אלגוריתם השיבוץ ומכניס את ההקצאות לטבלת DeliveryAssignment
+    מפעיל את אלגוריתם השיבוץ, מכניס את ההקצאות לטבלת DeliveryAssignment,
+    ומחזיר תוצאות מפורטות + סטטיסטיקות.
     """
     try:
-        created_count = create_assignments_from_matching()
-        return jsonify({
-            "message": f"{created_count} assignments created successfully"
-        }), 201
+        result = create_assignments_from_matching_and_get_results()
+
+        db = SessionLocal()
+        try:
+            # סטטיסטיקות נוספות
+            rr_repo = RecipientRequestRepository(db)
+            all_reqs = rr_repo.get_all_requests()
+            today_requests = [r for r in all_reqs if r.request_date.date() == date.today()]
+            total_requested = len(today_requests)
+            total_assigned = result["created_count"]
+
+            # ספירת מרכזים ייחודיים
+            unique_centers = len(set(a["center_id"] for a in result["assignments"]))
+
+            return jsonify({
+                "message": f"{total_assigned} שיבוצים נוצרו בהצלחה",
+                "created_count": total_assigned,
+                "total_requested_today": total_requested,
+                "unassigned": total_requested - total_assigned,
+                "unique_centers_used": unique_centers,
+                "assignments": result["assignments"]
+            }), 201
+        finally:
+            db.close()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
