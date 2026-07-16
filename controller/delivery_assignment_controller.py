@@ -1,48 +1,54 @@
 from flask import Blueprint, request, jsonify
 from repository.delivery_assignmentRepository import DeliveryAssignmentRepository
-from repository.distribution_centerRepository import DistributionCenterRepository
-from repository.recipientRepository import RecipientRepository
-from repository.recipient_request_repository import RecipientRequestRepository
 from db_connection import SessionLocal
-from dto.delivery_assignmentDTO import DeliveryAssignmentDTO
+from dto.delivery_assignmentDTO import DeliveryAssignmentDTO  # נניח שיש קובץ DTO
 from typing import List
-from datetime import date
-from services.delivery_assignment_service import create_assignments_from_matching_and_get_results
+from services.delivery_assignment_service import create_assignments_from_matching
+from services.utils.googleMaps import reverse_geocode_address
+from repository.recipientRepository import RecipientRepository
+from repository.distribution_centerRepository import DistributionCenterRepository
 
 
 # Blueprint עבור DeliveryAssignment
 delivery_assignment_bp = Blueprint('delivery_assignment_bp', __name__, url_prefix='/delivery_assignment')
+
+
+@delivery_assignment_bp.route('', methods=['POST'])
+def create_delivery_assignment():
+    db_session = SessionLocal()
+    try:
+        data = request.get_json() or {}
+        repo = DeliveryAssignmentRepository(db_session)
+
+        created = repo.create_delivery_assignment(
+            DistributionCenterID=data.get('DistributionCenterID'),
+            RecipientID=data.get('RecipientID'),
+            VolunteerID=data.get('VolunteerID'),
+            amount_of_meals=data.get('amount_of_meals'),
+            freshness_priority=data.get('freshness_priority', 0)
+        )
+
+        dto = DeliveryAssignmentDTO(
+            id=created.id,
+            DistributionCenterID=created.DistributionCenterID,
+            RecipientID=created.RecipientID,
+            VolunteerID=created.VolunteerID,
+            amount_of_meals=created.amount_of_meals,
+            freshness_priority=created.freshness_priority
+        )
+        return jsonify(dto.__dict__), 201
+    finally:
+        db_session.close()
+
+
 @delivery_assignment_bp.route('/run_matching', methods=['POST'])
 def run_matching_and_create_assignments():
     """
-    מפעיל את אלגוריתם השיבוץ, מכניס את ההקצאות לטבלת DeliveryAssignment,
-    ומחזיר תוצאות מפורטות + סטטיסטיקות.
+    מפעיל את אלגוריתם השיבוץ ומכניס את ההקצאות לטבלת DeliveryAssignment
     """
     try:
-        result = create_assignments_from_matching_and_get_results()
-
-        db = SessionLocal()
-        try:
-            # סטטיסטיקות נוספות
-            rr_repo = RecipientRequestRepository(db)
-            all_reqs = rr_repo.get_all_requests()
-            today_requests = [r for r in all_reqs if r.request_date.date() == date.today()]
-            total_requested = len(today_requests)
-            total_assigned = result["created_count"]
-
-            # ספירת מרכזים ייחודיים
-            unique_centers = len(set(a["center_id"] for a in result["assignments"]))
-
-            return jsonify({
-                "message": f"{total_assigned} שיבוצים נוצרו בהצלחה",
-                "created_count": total_assigned,
-                "total_requested_today": total_requested,
-                "unassigned": total_requested - total_assigned,
-                "unique_centers_used": unique_centers,
-                "assignments": result["assignments"]
-            }), 201
-        finally:
-            db.close()
+        result = create_assignments_from_matching()
+        return jsonify(result), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -79,16 +85,35 @@ def get_all_delivery_assignments():
         repo = DeliveryAssignmentRepository(db_session)
         assignments = repo.get_all_delivery_assignments()
 
-        all_dto: List[dict] = [
-            DeliveryAssignmentDTO(
+        recipient_repo = RecipientRepository(db_session)
+        center_repo = DistributionCenterRepository(db_session)
+        recipients = {r.id: r for r in recipient_repo.get_all_recipients()}
+        centers = {c.id: c for c in center_repo.get_all_distribution_centers()}
+
+        all_dto: List[dict] = []
+        for a in assignments:
+            recipient = recipients.get(a.RecipientID)
+            center = centers.get(a.DistributionCenterID)
+            address = None
+            if recipient and recipient.location_lat is not None and recipient.location_lng is not None:
+                address = reverse_geocode_address(float(recipient.location_lat), float(recipient.location_lng))
+            elif center and center.location_lat is not None and center.location_lng is not None:
+                address = reverse_geocode_address(float(center.location_lat), float(center.location_lng))
+
+            dto = DeliveryAssignmentDTO(
                 id=a.id,
                 DistributionCenterID=a.DistributionCenterID,
                 RecipientID=a.RecipientID,
                 VolunteerID=a.VolunteerID,
                 amount_of_meals=a.amount_of_meals,
                 freshness_priority=a.freshness_priority
-            ).__dict__ for a in assignments
-        ]
+            ).__dict__
+            dto.update({
+                "recipient_username": recipient.username if recipient else None,
+                "center_username": center.username if center else None,
+                "address": address,
+            })
+            all_dto.append(dto)
 
         return jsonify(all_dto)
     finally:

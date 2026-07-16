@@ -7,7 +7,7 @@
 ## Algorithm 1 — Batch Matching (Gale-Shapley Style)
 
 ### מטרה
-לשבץ נזקקים למרכזי חלוקה באופן אופטימלי — כל נזקק לקבל אוכל ממרכז החלוקה המתאים לו ביותר.
+לשבץ מוטבים למרכזי חלוקה באופן אופטימלי — כל מוטב לקבל אוכל ממרכז החלוקה המתאים לו ביותר.
 
 ### קובצי קוד מעורבים
 
@@ -35,16 +35,21 @@ for each (center, recipient) pair:
     distance = haversine(center.location, recipient.location)
     if distance > 100km → skip
     
-    score = distance_ratio * 0.8 + meals_ratio * 0.2
+    meal_type = 1  // חם, 0 = יבש
+    if meal_type == 1:
+        score = distance_ratio * 0.95 + meals_ratio * 0.05 + distance_ratio * 0.15
+    else:
+        score = distance_ratio * 0.8 + meals_ratio * 0.2 + distance_ratio * 0.04
     // איפה:
     //   distance_ratio = distance / 100
     //   meals_ratio = (center_meals - recipient_meals) / center_meals
     // ציון נמוך = יותר טוב
 ```
 
-הניקוד משלב שני שיקולים:
+הניקוד משלב שלושה שיקולים:
 - **מרחק (80%)** — ככל שקרוב יותר, ציון טוב יותר
 - **ניצול מזון (20%)** — ככל שנשאר יותר אוכל אחרי ההקצאה, ציון טוב יותר
+- **סוג ארוחה** — ארוחה חמה מקבלת דחיפה לקרבה גבוהה יותר, כדי לצמצם זמן הגעה
 
 #### שלב 1 — שיבוץ ראשי (Gale-Shapley)
 
@@ -55,7 +60,7 @@ queue = deque(כל ה-centers)
 recipient_assignment = {}    // recipient_id → {center_id, score, recipient_meals, ...}
 current_index = {center: 0}  // איזה מועמד כל center מנסה עכשיו
 
-while queue לא ריק AND לא שובצו כל הנזקקים:
+while queue לא ריק AND לא שובצו כל המוטבים:
     center = queue.popleft()
     idx = current_index[center]
     
@@ -79,14 +84,14 @@ while queue לא ריק AND לא שובצו כל הנזקקים:
             recipient_assignment[recipient] = {center, score, ...}
             current_index[center] += 1
             queue.append(center)     // center ממשיך למועמד הבא
-            queue.append(old_center) // old_center חוזר לתור (צריך למצוא נזקק אחר)
+            queue.append(old_center) // old_center חוזר לתור (צריך למצוא מוטב אחר)
         else:
             // ההתאמה הישנה טובה יותר — center מנסה את המועמד הבא
             current_index[center] += 1
             queue.append(center)
 ```
 
-זהו מימוש של **Deferred Acceptance** (Gale-Shapley) — מרכזי חלוקה "מציעים" לנזקקים לפי סדר ההעדפות. נזקק "מקבל" את ההצעה הטובה ביותר, אבל יכול להתחלף אם מגיעה הצעה טובה יותר. מרכז שנדחה חוזר לתור ומציע לנזקק הבא ברשימה.
+זהו מימוש של **Deferred Acceptance** (Gale-Shapley) — מרכזי חלוקה "מציעים" למוטבים לפי סדר ההעדפות. מוטב "מקבל" את ההצעה הטובה ביותר, אבל יכול להתחלף אם מגיעה הצעה טובה יותר. מרכז שנדחה חוזר לתור ומציע למוטב הבא ברשימה.
 
 #### שלב 2 — השלמת קיבולת
 
@@ -101,7 +106,7 @@ remaining_meals_by_center = {
     center_id: original_meals - used_meals
 }
 
-// בונים מועמדים חדשים — רק לנזקקים שלא שובצו
+// בונים מועמדים חדשים — רק למוטבים שלא שובצו
 // והמרחק נמדד מה-first_recipient של ה-center (לא מהמרכז עצמו)
 // ומגבלת מרחק 10km
 second_phase = build_second_phase_candidates(...)
@@ -111,7 +116,7 @@ remaining_ratio = (remaining_meals - recipient_meals) / remaining_meals
 score = (distance / 100) * 0.8   +   (1 - remaining_ratio) * 0.2
 
 אותו Gale-Shapley כמו שלב 1, אבל:
-- רק נזקקים לא משובצים
+- רק מוטבים לא משובצים
 - מועמדים מבוססי remaining_meals (לא center_meals המקורי)
 - מרחק מחושב מ-first_recipient
 - max_distance = 10km (לא 100)
@@ -121,7 +126,7 @@ score = (distance / 100) * 0.8   +   (1 - remaining_ratio) * 0.2
 - **משתמש ב-Haversine** (קו אווירי), לא בזמני נסיעה אמיתיים של Google Maps
 - **מגבלת 100km לשלב 1** — זוגות רחוקים מדי לא ייחשבו בכלל
 - **מגבלת 10km לשלב 2** — טווח מצומצם מאוד לסבב שני
-- **אין חפיפה** — כל נזקק משויך למרכז אחד בלבד
+- **אין חפיפה** — כל מוטב משויך למרכז אחד בלבד
 - **Freshness priority** — משומר ב-assignment אבל **לא משפיע על הניקוד**, רק נשמר כשדה
 
 ---
@@ -129,7 +134,7 @@ score = (distance / 100) * 0.8   +   (1 - remaining_ratio) * 0.2
 ## Algorithm 2 — VRP Route Solver
 
 ### מטרה
-בהינתן קבוצות (groups) של משלוחים שכבר שובצו למרכזי חלוקה, למצוא את המסלול האופטימלי למתנדב — מקסום מספר נזקקים, מינימום זמן.
+בהינתן קבוצות (groups) של משלוחים שכבר שובצו למרכזי חלוקה, למצוא את המסלול האופטימלי למתנדב — מקסום מספר מוטבים, מינימום זמן.
 
 ### קובצי קוד מעורבים
 
@@ -172,6 +177,7 @@ group = {
         {"lat": 32.0800, "lng": 34.7750}
     ],
     "assignment_ids": [101, 102],
+    "meal_types": [1, 0],
     "total_meals": 4,
     "group_families": 2
 }
@@ -251,8 +257,8 @@ return best_state
 **apply_move — מה קורה כשמוסיפים קבוצה למסלול:**
 ```
 1. service_time = group_families * 5 דקות
-2. new_location = המיקום של הנזקק האחרון בקבוצה
-   (אם יש נזקקים: המיקום האחרון ב-ordered_recipients
+2. new_location = המיקום של המוטב האחרון בקבוצה
+    (אם יש מוטבים: המיקום האחרון ב-ordered_recipients
     אחרת: מיקום מרכז החלוקה)
 3. new_time = old_time + travel_time + service_time
 4. new_route = old_route + [center_id]
@@ -260,7 +266,7 @@ return best_state
 6. total_deliveries += group_families
 ```
 
-#### שלב 4 — סדר נזקקים בתוך קבוצה (Nearest Neighbor)
+#### שלב 4 — סדר מוטבים בתוך קבוצה (Nearest Neighbor)
 
 ```
 get_ordered_group_recipients(group, current_location):
@@ -312,7 +318,7 @@ def travel_time_between_points(lat1, lng1, lat2, lng2):
 - **זמן שירות:** 5 דקות למשפחה, קבוע
 - **Google Maps cache:** מנורמל ל-4 ספרות עשרוניות, cache in-memory
 - **state_key:** ממיין את ה-visited_groups ומגביל ל-4 תווים — לא ייחודי לחלוטין, pruning עלול להיות אגרסיבי מדי
-- **Haversine למיון פנימי:** סדר הנזקקים בתוך קבוצה משתמש במרחק אווירי, לא בזמן נסיעה אמיתי
+- **Haversine למיון פנימי:** סדר המוטבים בתוך קבוצה משתמש במרחק אווירי, לא בזמן נסיעה אמיתי
 - **האלגוריתם חמדן (greedy) במובן מסוים:** בגלל ה-Branch & Bound (רק 3 מצבים לאיטרציה), ייתכן שהפתרון הגלובלי האופטימלי לא יימצא. זה tradeoff מכוון לטובת ביצועים
 
 ---
@@ -329,7 +335,7 @@ def travel_time_between_points(lat1, lng1, lat2, lng2):
 │            ▼                                                    │
 │  2. Algorithm 1: Batch Matching                                │
 │     • Gale-Shapley דו-שלבי                                     │
-│     • פלט: recipient → center (איזה נזקק מקבל מאיפה)           │
+│     • פלט: recipient → center (איזה מוטב מקבל מאיפה)           │
 │            │                                                    │
 │            ▼                                                    │
 │  3. שמירה ב-DeliveryAssignment                                 │
@@ -378,7 +384,7 @@ WHERE VolunteerID IS NULL
    - `recipients_locations` — מערך של `{lat, lng}` מ-Recipient
    - `assignment_ids` — מערך של DeliveryAssignment.id
    - `total_meals` — סכום amount_of_meals
-   - `group_families` — ספירת נזקקים בקבוצה
+    - `group_families` — ספירת מוטבים בקבוצה
 
 ---
 

@@ -3,6 +3,7 @@ from repository.recipientRepository import RecipientRepository
 from repository.DC_request_Repository import DCRequestRepository
 from repository.recipient_request_repository import RecipientRequestRepository
 from services.utils.googleMaps import distance_between_points
+from datetime import date
 
 
 
@@ -11,7 +12,8 @@ from services.utils.googleMaps import distance_between_points
 def calculate_match_score(
     center_meals: int,
     recipient_meals: int,
-    distance: float
+    distance: float,
+    meal_type: int = 0
 ) -> float:
     """
     Calculate match score.
@@ -25,10 +27,19 @@ def calculate_match_score(
         center_meals - recipient_meals
     ) / center_meals
 
+    if meal_type == 1:
+        meal_type_weight = 0.35
+        meal_type_distance_bias = min(distance_ratio, 1.0) * 0.2
+    else:
+        meal_type_weight = 0.12
+        meal_type_distance_bias = min(distance_ratio, 1.0) * 0.05
+
     score = (
-        distance_ratio * 0.8
+        distance_ratio * (0.8 + meal_type_distance_bias)
         +
-        remaining_meals_ratio * 0.2
+        remaining_meals_ratio * (0.2 - meal_type_weight)
+        +
+        meal_type_weight
     )
 
     return score
@@ -60,6 +71,12 @@ def build_candidates_for_centers(db,max_distance_km=100):
 
     center_requests = ds_request_repo.get_all_requests()
     recipient_requests = recipient_request_repo.get_all_requests()
+    today = date.today()
+
+    recipient_requests = [
+        request for request in recipient_requests
+        if request.request_date and request.request_date.date() == today
+    ]
 
     center_requests_dict = {
         request.DistributionCenterID: request
@@ -93,9 +110,14 @@ def build_candidates_for_centers(db,max_distance_km=100):
             if recipient_request is None:
                 continue
 
+            if recipient.location_lat is None or recipient.location_lng is None:
+                continue
+
             recipient_meals = (
                 recipient_request.amount_of_meals
             )
+
+            meal_type = getattr(center_request, "type", 0) or 0
 
             if recipient_meals > center_meals:
                 continue
@@ -113,7 +135,8 @@ def build_candidates_for_centers(db,max_distance_km=100):
             score = calculate_match_score(
                 center_meals=center_meals,
                 recipient_meals=recipient_meals,
-                distance=distance
+                distance=distance,
+                meal_type=meal_type
             )
 
             candidates_by_center[center.id].append(
@@ -121,7 +144,8 @@ def build_candidates_for_centers(db,max_distance_km=100):
                     recipient.id,
                     score,
                     recipient_meals,
-                    center_meals
+                    center_meals,
+                    meal_type
                 )
             )
 
@@ -256,7 +280,8 @@ def build_remaining_meals_by_center(
 def calculate_second_phase_score(
     remaining_meals: int,
     recipient_meals: int,
-    distance: float
+    distance: float,
+    meal_type: int = 0
 ) -> float:
 
     # אם אין מספיק ארוחות → סקור גבוה מאוד כדי למנוע הקצאה
@@ -269,8 +294,15 @@ def calculate_second_phase_score(
     # כמה מהארוחות נשארו אחרי ההקצאה
     remaining_ratio = (remaining_meals - recipient_meals) / remaining_meals
 
+    if meal_type == 1:
+        meal_type_weight = 0.3
+        distance_bias = min(distance / 100, 1.0) * 0.2
+    else:
+        meal_type_weight = 0.1
+        distance_bias = min(distance / 100, 1.0) * 0.05
+
     # ציון קטן = טוב יותר
-    score = distance_ratio * 0.8 + (1 - remaining_ratio) * 0.2
+    score = distance_ratio * (0.8 + distance_bias) + (1 - remaining_ratio) * (0.2 - meal_type_weight) + meal_type_weight
 
     return score
 
@@ -282,6 +314,7 @@ def build_second_phase_candidates(
     center_usage,
     remaining_meals_by_center,
     unassigned_recipients,
+    ds_requests_dict,
     max_distance_km=10
 ):
 
@@ -291,6 +324,12 @@ def build_second_phase_candidates(
 
     recipients = recipient_repo.get_all_recipients()
     recipient_requests = recipient_request_repo.get_all_requests()
+    today = date.today()
+
+    recipient_requests = [
+        request for request in recipient_requests
+        if request.request_date and request.request_date.date() == today
+    ]
 
     recipients_dict = {r.id: r for r in recipients}
     recipient_requests_dict = {r.RecipientID: r for r in recipient_requests}
@@ -308,6 +347,9 @@ def build_second_phase_candidates(
         first_recipient_id = usage["first_recipient_id"]
         first_recipient = recipients_dict[first_recipient_id]
 
+        if first_recipient.location_lat is None or first_recipient.location_lng is None:
+            continue
+
         for recipient_id in unassigned_recipients:
 
             recipient_request = recipient_requests_dict.get(recipient_id)
@@ -315,6 +357,7 @@ def build_second_phase_candidates(
                 continue
 
             recipient_meals = recipient_request.amount_of_meals
+            meal_type = getattr(ds_requests_dict.get(center_id), "type", 0) or 0
 
 
 
@@ -323,6 +366,9 @@ def build_second_phase_candidates(
                 continue
 
             recipient = recipients_dict[recipient_id]
+
+            if recipient.location_lat is None or recipient.location_lng is None:
+                continue
 
             distance = distance_between_points(
                 float(first_recipient.location_lat),
@@ -341,13 +387,19 @@ def build_second_phase_candidates(
             meals_ratio = (remaining_meals - recipient_meals) / remaining_meals
 
             score = distance_ratio * 0.8 + meals_ratio * 0.2
+            if meal_type == 1:
+                score += 0.15 * min(distance / 100, 1.0)
+                score -= 0.05 * (1 - meals_ratio)
+            else:
+                score += 0.04 * min(distance / 100, 1.0)
 
             new_candidates_by_center[center_id].append(
                 (
                     recipient_id,
                     score,
                     recipient_meals,
-                    remaining_meals
+                    remaining_meals,
+                    meal_type
                 )
             )
 

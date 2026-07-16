@@ -36,6 +36,9 @@ class RecipientRepository:
     def get_recipient(self, recipientID: int) -> Recipient | None:
         return self.db.query(Recipient).filter(Recipient.id == recipientID).first()
 
+    def get_by_username(self, username: str) -> Recipient | None:
+        return self.db.query(Recipient).filter(Recipient.username == username).first()
+
     def get_by_username_password(self, username, password):
         """מחזיר recipient אם הסיסמה תואמת, אחרת None"""
         recipient = self.db.query(Recipient).filter_by(username=username).first()

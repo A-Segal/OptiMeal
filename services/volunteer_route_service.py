@@ -1,15 +1,31 @@
 from services.vrp.solver import solve
-from services.vrp.vrp_state import get_group_families, get_group_meals, VEHICLE_CAPACITY, get_ordered_group_recipients
+from services.vrp.vrp_state import get_group_families, get_group_meals, get_group_service_time, VEHICLE_CAPACITY, get_ordered_group_recipients
+from repository.VehicleRepository import VehicleRepository
 from services.utils.googleMaps import (
     geocode_address,
     travel_time_between_points,
-    reverse_geocode
+    safe_travel_time,
+    distance_between_points,
+    reverse_geocode_region,
+    reverse_geocode_address,
 )
 
 
 def get_capacity(vehicle_type):
     """מחזיר קיבולת רכב במנות לפי סוג הרכב (1-5)."""
     return VEHICLE_CAPACITY.get(vehicle_type, 120)  # default = פרטי
+
+
+def _fallback_travel_time_minutes(lat1, lng1, lat2, lng2):
+    """
+    Fallback לזמן נסיעה בדקות במקרה ש-Google לא מחזיר תשובה תקינה.
+    משתמש בקירוב של 35 קמ"ש בתוך עיר + 3 דק' מרווח תפעולי.
+    """
+    km = distance_between_points(lat1, lng1, lat2, lng2)
+    return (km / 35.0) * 60.0 + 3.0
+
+
+STRICT_GOOGLE_TRAVEL_TIMES = True
 
 
 # =========================
@@ -24,11 +40,21 @@ def build_detailed_route(route, groups, start_location):
     """
     group_map = {g["center_id"]: g for g in groups}
 
+    # Cache reverse-geocoded addresses per rounded coordinate to reduce API calls.
+    address_cache = {}
+
+    def _step_address(lat, lng):
+        key = (round(float(lat), 5), round(float(lng), 5))
+        if key in address_cache:
+            return address_cache[key]
+        addr = reverse_geocode_address(lat, lng)
+        address_cache[key] = addr
+        return addr
+
     full_route = []
     current_location = start_location
 
     # ── START ──
-    start_addr = reverse_geocode(start_location["lat"], start_location["lng"])
     full_route.append({
         "step": 0,
         "type": "start",
@@ -38,8 +64,8 @@ def build_detailed_route(route, groups, start_location):
         "lat": start_location["lat"],
         "lng": start_location["lng"],
         "label": "נקודת התחלה",
-        "detail": start_addr or "",
-        "address": start_addr or "",
+        "detail": "",
+        "address": _step_address(start_location["lat"], start_location["lng"]),
         "meals": 0,
     })
 
@@ -52,7 +78,6 @@ def build_detailed_route(route, groups, start_location):
 
         center_name = group.get("center_name", f"מרכז חלוקה #{center_id}")
         center_total_meals = group.get("total_meals", 0)
-        center_addr = reverse_geocode(group["center_lat"], group["center_lng"])
 
         # ── CENTER (איסוף) ──
         full_route.append({
@@ -65,7 +90,7 @@ def build_detailed_route(route, groups, start_location):
             "lng": group["center_lng"],
             "label": center_name,
             "detail": f"איסוף — {center_total_meals} מנות",
-            "address": center_addr or "",
+            "address": _step_address(group["center_lat"], group["center_lng"]),
             "meals": center_total_meals,
         })
         step += 1
@@ -74,13 +99,14 @@ def build_detailed_route(route, groups, start_location):
         ordered_recipients = get_ordered_group_recipients(group, current_location)
         recipient_names = group.get("recipient_names", [])
         recipient_meals = group.get("recipient_meals", [])
+        # map: assignment_id → index
         assignment_ids = group.get("assignment_ids", [])
 
         for aid, loc in ordered_recipients:
+            # find index for this assignment_id
             idx = assignment_ids.index(aid) if aid in assignment_ids else -1
             recip_name = recipient_names[idx] if 0 <= idx < len(recipient_names) else f"משפחה #{aid}"
             recip_meals = recipient_meals[idx] if 0 <= idx < len(recipient_meals) else 0
-            recip_addr = reverse_geocode(loc["lat"], loc["lng"])
 
             full_route.append({
                 "step": step,
@@ -92,13 +118,50 @@ def build_detailed_route(route, groups, start_location):
                 "lng": loc["lng"],
                 "label": recip_name,
                 "detail": f"חלוקה — {recip_meals} מנות",
-                "address": recip_addr or "",
+                "address": _step_address(loc["lat"], loc["lng"]),
                 "meals": recip_meals,
             })
             step += 1
             current_location = loc
 
     return full_route
+
+
+def calculate_actual_route_minutes(route, groups, start_location, travel_time_service):
+    group_map = {g["center_id"]: g for g in groups}
+    current_location = start_location
+    total_minutes = 0.0
+
+    for center_id in route:
+        group = group_map.get(center_id)
+        if not group:
+            continue
+
+        total_minutes += travel_time_service(
+            current_location["lat"],
+            current_location["lng"],
+            group["center_lat"],
+            group["center_lng"],
+        )
+
+        previous_location = {
+            "lat": group["center_lat"],
+            "lng": group["center_lng"],
+        }
+        ordered_recipients = get_ordered_group_recipients(group, current_location)
+        for _, recipient_location in ordered_recipients:
+            total_minutes += travel_time_service(
+                previous_location["lat"],
+                previous_location["lng"],
+                recipient_location["lat"],
+                recipient_location["lng"],
+            )
+            previous_location = recipient_location
+
+        total_minutes += get_group_service_time(group)
+        current_location = previous_location
+
+    return total_minutes
 
 
 # =========================
@@ -155,41 +218,91 @@ def run_volunteer_route(
         and g.get("center_lng")
     ]
 
-    # 4. VEHICLE CAPACITY — במנות
-    vehicle = getattr(volunteer, "vehicle", None)
-    vehicle_type = getattr(vehicle, "capacity", 3) if vehicle else 3
-    vehicle_capacity = get_capacity(vehicle_type)  # קיבולת במנות
-
     if not groups:
+        no_unassigned_left = False
+        try:
+            no_unassigned_left = not assignment_repo.has_unassigned_assignments()
+        except Exception:
+            no_unassigned_left = False
+
+        message = (
+            "תודה! כל הארוחות כבר שובצו למתנדבים"
+            if no_unassigned_left
+            else "אין כרגע קבוצות זמינות לשיבוץ"
+        )
         return {
             "volunteer_id": volunteer.id,
             "start_location": start_location,
             "route": [],
             "detailed_route": [],
-            "total_meals": 0,
-            "visited_count": 0,
-            "final_time_minutes": 0,
-            "vehicle_capacity": vehicle_capacity,
-            "groups_count": 0,
-            "message": "לא נמצאו משלוחים זמינים כרגע. נסה שוב מאוחר יותר."
+            "message": message
         }
 
+    # 4. VEHICLE CAPACITY — במנות
+    vehicle = VehicleRepository(volunteer_repo.db).get_by_volunteer_id(volunteer.id)
+    # vehicle.capacity = סוג הרכב (1-5)
+    vehicle_type = int(getattr(vehicle, "capacity", 3)) if vehicle else 3
+    vehicle_capacity = get_capacity(vehicle_type)  # קיבולת במנות
+
     # 5. AVAILABLE TIME — המרה משעות לדקות
-    if available_time is not None:
-        available_time_minutes = available_time * 60  # שעות → דקות
+    try:
+        available_time_num = float(available_time) if available_time is not None else None
+    except (TypeError, ValueError):
+        available_time_num = None
+
+    if available_time_num is not None and available_time_num > 0:
+        available_time_minutes = available_time_num * 60  # שעות → דקות
     else:
         available_time_minutes = 999999  # אין הגבלה
 
     print(f"Available time: {available_time_minutes} min (from {available_time} hours)")
     print(f"Vehicle capacity: {vehicle_capacity} meals (type {vehicle_type})")
 
+    # 5b. CITY PREFERENCE — reverse geocode start location + group centers
+    volunteer_city = None
+    group_cities = {}
+    if groups:
+        try:
+            geo_start = reverse_geocode_region(start_location["lat"], start_location["lng"])
+            volunteer_city = geo_start.get("city") if isinstance(geo_start, dict) else None
+            print(f"Volunteer city: {volunteer_city}")
+        except Exception:
+            pass
+
+        # City of each group center
+        for g in groups:
+            try:
+                geo = reverse_geocode_region(g["center_lat"], g["center_lng"])
+                if isinstance(geo, dict):
+                    city = geo.get("city")
+                    if city:
+                        group_cities[g["center_id"]] = city
+            except Exception:
+                pass
+
+        if volunteer_city:
+            same_city_count = sum(1 for c in group_cities.values() if c == volunteer_city)
+            print(f"Groups in same city ({volunteer_city}): {same_city_count}/{len(groups)}")
+
     # 6. SOLVER
+    routing_service = google_maps_service or travel_time_between_points
+
+    def robust_travel_time(lat1, lng1, lat2, lng2):
+        minutes = safe_travel_time(lat1, lng1, lat2, lng2, routing_service)
+        if minutes >= 999:
+            if STRICT_GOOGLE_TRAVEL_TIMES:
+                return 999
+            return _fallback_travel_time_minutes(lat1, lng1, lat2, lng2)
+        return minutes
+
     result = solve(
         groups=groups,
         start_location=start_location,
         max_capacity=vehicle_capacity,
         available_time=available_time_minutes,
-        google_maps_service=travel_time_between_points
+        google_maps_service=robust_travel_time,
+        preferred_city=volunteer_city,
+        group_cities=group_cities,
     )
 
     if not result:
@@ -198,17 +311,36 @@ def run_volunteer_route(
     route = result.get("route", [])
 
     if not route:
+        diagnostics = result.get("diagnostics", {}) if isinstance(result, dict) else {}
         return {
             "volunteer_id": volunteer.id,
             "start_location": start_location,
             "route": [],
             "detailed_route": [],
-            "total_meals": 0,
-            "visited_count": 0,
-            "final_time_minutes": 0,
-            "vehicle_capacity": vehicle_capacity,
-            "groups_count": len(groups),
-            "message": "לא נמצא מסלול שמתאים לזמן הפנוי ולקיבולת הרכב. נסה להגדיל את הזמן הפנוי."
+            "message": "לא נמצא מסלול מתאים לזמן ולקיבולת שהוגדרו",
+            "diagnostics": diagnostics,
+        }
+
+    actual_route_minutes = calculate_actual_route_minutes(
+        route=route,
+        groups=groups,
+        start_location=start_location,
+        travel_time_service=robust_travel_time,
+    )
+
+    if actual_route_minutes > available_time_minutes + 0.01:
+        return {
+            "volunteer_id": volunteer.id,
+            "start_location": start_location,
+            "route": [],
+            "detailed_route": [],
+            "message": "לא נמצא מסלול מתאים לזמן ולקיבולת שהוגדרו",
+            "diagnostics": {
+                **(result.get("diagnostics", {}) if isinstance(result, dict) else {}),
+                "available_time_minutes": available_time_minutes,
+                "actual_route_minutes": actual_route_minutes,
+                "time_validation_failed": True,
+            },
         }
 
     # 7. BUILD UI ROUTE
@@ -234,6 +366,6 @@ def run_volunteer_route(
         "groups_count": len(groups),
         "vehicle_capacity": vehicle_capacity,          # קיבולת במנות
         "total_meals": result.get("total_meals", 0),   # סה"כ מנות במסלול
-        "final_time_minutes": result.get("final_time", 0),
+        "final_time_minutes": actual_route_minutes,
         "visited_count": len(route)
     }

@@ -72,9 +72,7 @@ def login():
                 "lname": staff.lname,
                 "role": "staff",
                 "username": staff.username,
-                "permission": permission_type,
-                "mail": staff.mail or "",
-                "phone": staff.phone or ""
+                "permission": permission_type
             }), 200
 
         # ===================== NOT FOUND =====================

@@ -7,9 +7,9 @@
 ## 1. רקע — איפה האלגוריתם יושב במערכת
 
 ### האלגוריתם הראשון (Gale-Shapley) — רץ בלילה
-- מקבל רשימת מרכזי חלוקה (suppliers) ונזקקים (consumers)
-- משבץ נזקקים למרכזים לפי Match Score (מרחק, כמות מנות, טריות)
-- מגבלה: כל מרכז מקבל עד 2 נזקקים
+- מקבל רשימת מרכזי חלוקה (suppliers) ומוטבים (consumers)
+- משבץ מוטבים למרכזים לפי Match Score (מרחק, כמות מנות, טריות)
+- מגבלה: כל מרכז מקבל עד 2 מוטבים
 - ממלא טבלת `DeliveryAssignment` **בלי VolunteerID**
 - זוהי שכבת השיבוץ המוקדם — מה יהיה מחר
 
@@ -39,8 +39,9 @@
 | 5 | 500 | מסחרי |
 
 ### קבוצות (Groups)
-כל קבוצה = מרכז חלוקה + הנזקקים המשויכים אליו (בדרך כלל 1-2 נזקקים).
+כל קבוצה = מרכז חלוקה + המוטבים המשויכים אליו (בדרך כלל 1-2 מוטבים).
 הקבוצות נלקחות מטבלת `DeliveryAssignment` — רק שורות ללא VolunteerID.
+כל קבוצה כוללת גם `meal_types`, כאשר `0 = יבש` ו-`1 = חם`.
 
 ### הגבלות
 1. **זמן**: `current_time + travel_time + service_time ≤ available_time`
@@ -157,6 +158,7 @@ services/vrp/
 - `get_vehicle_capacity(type)` — המרה סוג רכב → קיבולת במנות
 - `get_group_families(group)` — מחזיר מספר משפחות בקבוצה
 - `get_group_meals(group)` — מחזיר סך מנות בקבוצה
+- `meal_types` — סוגי הארוחות בקבוצה (`0 = יבש`, `1 = חם`)
 - `create_initial_state(...)` — יוצר מצב התחלתי (כולל total_meals=0)
 - `is_feasible(state, group, travel_time)` — בודק חוקיות מעבר (בדיקה מצטברת של מנות)
 - `apply_move(state, group, travel_time)` — יוצר מצב חדש אחרי מעבר
@@ -165,7 +167,7 @@ services/vrp/
 ### `solver.py`
 - `solve(groups, start_location, max_capacity, available_time, google_maps_service)`
 - State Space Search מלא עם pruning
-- מחזיר את המסלול האופטימלי (מקסום מנות)
+- מחזיר את המסלול האופטימלי (מקסום מנות, עם עדיפות גבוהה יותר לקרבה עבור ארוחות חמות)
 
 ---
 

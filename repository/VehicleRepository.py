@@ -43,5 +43,6 @@ class VehicleRepository:
         return (
             self.db.query(Vehicle)
             .filter(Vehicle.VolunteerID == volunteer_id)
+            .order_by(Vehicle.id.desc())
             .first()
         )

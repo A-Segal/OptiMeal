@@ -11,6 +11,7 @@ class DCRequestRepository:
         self,
         distribution_center_id: int,
         amount_of_meals: int,
+        type: int = 0,
         freshness_priority: int = 0,
         request_date: datetime = None
     ) -> DC_Request:
@@ -19,6 +20,7 @@ class DCRequestRepository:
         new_request = DC_Request(
             DistributionCenterID=distribution_center_id,
             amount_of_meals=amount_of_meals,
+            type=type,
             freshness_priority=freshness_priority,
             request_date=request_date
         )
@@ -40,6 +42,7 @@ class DCRequestRepository:
         self,
         request_id: int,
         amount_of_meals: int = None,
+        type: int = None,
         freshness_priority: int = None,
         request_date: datetime = None
     ) -> DC_Request | None:
@@ -47,6 +50,8 @@ class DCRequestRepository:
         if request:
             if amount_of_meals is not None:
                 request.amount_of_meals = amount_of_meals
+            if type is not None:
+                request.type = type
             if freshness_priority is not None:
                 request.freshness_priority = freshness_priority
             if request_date is not None:

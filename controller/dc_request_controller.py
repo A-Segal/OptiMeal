@@ -18,13 +18,24 @@ def add_request():
 
         request_date = data.get('request_date')
         if request_date:
-            request_date = datetime.fromisoformat(request_date)
+            try:
+                # תומך גם ב-ISO string וגם ב-Date object מה-JSON
+                if isinstance(request_date, str):
+                    request_date = datetime.fromisoformat(request_date.replace('Z', '+00:00'))
+                else:
+                    request_date = datetime.now()
+            except:
+                request_date = datetime.now()
+        else:
+            request_date = datetime.now()
 
-        freshness_priority = data.get('freshness_priority', 0)  # ערך ברירת מחדל 0
+        freshness_priority = data.get('freshness_priority', 0)
+        req_type = data.get('type', data.get('meal_type', 0))
 
         new_request = repo.create_request(
             distribution_center_id=data['DistributionCenterID'],
             amount_of_meals=data['amount_of_meals'],
+            type=req_type,
             request_date=request_date,
             freshness_priority=freshness_priority
         )
@@ -34,6 +45,7 @@ def add_request():
             DistributionCenterID=new_request.DistributionCenterID,
             amount_of_meals=new_request.amount_of_meals,
             request_date=new_request.request_date.isoformat(),
+            type=req_type,
             freshness_priority=new_request.freshness_priority
         )
         return jsonify(dto.__dict__), 201
@@ -56,7 +68,8 @@ def get_request(request_id):
             DistributionCenterID=req.DistributionCenterID,
             amount_of_meals=req.amount_of_meals,
             request_date=req.request_date.isoformat(),
-            freshness_priority=req.freshness_priority
+            freshness_priority=req.freshness_priority,
+            type=getattr(req, 'type', 0)
         )
         return jsonify(dto.__dict__)
     finally:
@@ -77,7 +90,8 @@ def get_all_requests():
                 DistributionCenterID=r.DistributionCenterID,
                 amount_of_meals=r.amount_of_meals,
                 request_date=r.request_date.isoformat(),
-                freshness_priority=r.freshness_priority
+                freshness_priority=r.freshness_priority,
+                type=getattr(r, 'type', 0)
             ).__dict__ for r in all_requests
         ]
         return jsonify(dto_list)
@@ -98,11 +112,13 @@ def update_request(request_id):
             request_date = datetime.fromisoformat(request_date)
 
         freshness_priority = data.get('freshness_priority', None)
+        req_type = data.get('type', data.get('meal_type', None))
 
         updated_request = repo.update_request(
             request_id,
             amount_of_meals=data.get('amount_of_meals'),
             request_date=request_date,
+            type=req_type,
             freshness_priority=freshness_priority
         )
 
@@ -114,7 +130,8 @@ def update_request(request_id):
             DistributionCenterID=updated_request.DistributionCenterID,
             amount_of_meals=updated_request.amount_of_meals,
             request_date=updated_request.request_date.isoformat(),
-            freshness_priority=updated_request.freshness_priority
+            freshness_priority=updated_request.freshness_priority,
+            type=getattr(updated_request, 'type', 0)
         )
         return jsonify(dto.__dict__)
     finally:

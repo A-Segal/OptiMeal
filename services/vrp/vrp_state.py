@@ -22,8 +22,8 @@ VEHICLE_CAPACITY = {
     5: 500,   # מסחרי
 }
 
-# זמן עיבוד פנימי לקבוצה (דקות) — איסוף מהמרכז + חלוקה לנזקקים
-SERVICE_TIME_PER_FAMILY = 5  # דקות למשפחה
+# זמן עיבוד פנימי לקבוצה (דקות) — איסוף מהמרכז + חלוקה לקבוצה כולה
+SERVICE_TIME_PER_GROUP = 5  # דקות לקבוצה
 
 
 def get_vehicle_capacity(vehicle_type: int) -> int:
@@ -53,8 +53,8 @@ def get_group_meals(group: dict) -> int:
 
 
 def get_group_service_time(group: dict) -> float:
-    """זמן שירות לקבוצה: 5 דקות למשפחה."""
-    return get_group_families(group) * SERVICE_TIME_PER_FAMILY
+    """זמן שירות לקבוצה: 5 דקות לכל הקבוצה."""
+    return SERVICE_TIME_PER_GROUP
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +223,62 @@ def apply_move(state: dict, group: dict, travel_time: float) -> dict:
 # ---------------------------------------------------------------------------
 # מפתח ייחודי למצב עבור pruning
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Branch & Bound: optimistic upper bound on remaining meals.
+# Sum of ALL remaining groups (ignores travel time) — safe optimistic bound.
+# In practice, tighter than the raw sum since groups are spread geographically.
+# Used for pruning: if current_meals + this bound can't beat best_meals, prune.
+# ---------------------------------------------------------------------------
+def estimate_remaining_meals(state: dict) -> int:
+    """סכום אופטימי של מנות כל הקבוצות שנותרו."""
+    return sum(get_group_meals(g) for g in state["remaining_groups"])
+
+
+def estimate_remaining_meals_tight(state: dict) -> float:
+    """
+    Tighter optimistic bound: sort remaining groups by meals-per-minute
+    (using straight-line distance as proxy), take greedily within remaining time.
+    More accurate than raw sum, leads to better pruning.
+    """
+    remaining_time = state["available_time"] - state["current_time"]
+    if remaining_time <= 0:
+        return 0.0
+
+    items = []
+    current_loc = state["current_location"]
+    for g in state["remaining_groups"]:
+        meals = get_group_meals(g)
+        if meals == 0:
+            continue
+        # Estimate travel time via haversine at ~40 km/h
+        dist = _distance_km(
+            current_loc["lat"], current_loc["lng"],
+            g["center_lat"], g["center_lng"]
+        )
+        travel_est = (dist / 35.0) * 60.0 + 3.0  # minutes
+        svc_time = get_group_service_time(g)
+        total_time = travel_est + svc_time
+        if total_time <= 0:
+            total_time = 1.0
+        density = meals / total_time
+        items.append((density, meals, total_time))
+
+    # Greedy fractional knapsack by density
+    items.sort(key=lambda x: x[0], reverse=True)
+    bound = 0.0
+    time_used = 0.0
+    for _, meals, t in items:
+        if time_used + t <= remaining_time:
+            bound += meals
+            time_used += t
+        else:
+            # Fractional: take part of the group
+            bound += meals * ((remaining_time - time_used) / t)
+            break
+
+    return bound
+
+
 def state_key(state: dict) -> str:
     """
     מחזיר מפתח ייחודי למצב — בשימוש לגיזום במנוע החיפוש.

@@ -90,6 +90,17 @@ def update_recipient(recipient_id):
     try:
         repo = RecipientRepository(db_session)
         data = request.get_json()
+        lat = data.get('location_lat')
+        lng = data.get('location_lng')
+
+        # אם נשלחה כתובת טקסט — geocode
+        if data.get('address'):
+            geo = geocode_address(data['address'])
+            if "error" in geo:
+                return jsonify({'error': f"הכתובת לא נמצאה: {data['address']}"}), 400
+            lat = geo['lat']
+            lng = geo['lng']
+
         updated_recipient = repo.update_recipient(
             recipientID=recipient_id,
             fname=data.get('fname'),
@@ -98,8 +109,8 @@ def update_recipient(recipient_id):
             password=data.get('password'),
             mail=data.get('mail'),
             phone=data.get('phone'),
-            location_lat=data.get('location_lat'),
-            location_lng=data.get('location_lng')
+            location_lat=lat,
+            location_lng=lng
         )
         if updated_recipient is None:
             return jsonify({'error': 'Recipient not found'}), 404

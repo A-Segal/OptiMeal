@@ -18,10 +18,22 @@ def add_recipient_request():
         repo = RecipientRequestRepository(db_session)
         data = request.get_json()
 
+        req_date = data.get('request_date')
+        if req_date:
+            try:
+                if isinstance(req_date, str):
+                    req_date = datetime.fromisoformat(req_date.replace('Z', '+00:00'))
+                else:
+                    req_date = datetime.now()
+            except:
+                req_date = datetime.now()
+        else:
+            req_date = datetime.now()
+
         new_request = repo.create_request(
             recipient_id=data['RecipientID'],
             amount_of_meals=data['amount_of_meals'],
-            request_date=datetime.fromisoformat(data['request_date']) if data.get('request_date') else None
+            request_date=req_date
         )
 
         # שימוש ב-DTO
@@ -29,7 +41,7 @@ def add_recipient_request():
             id=new_request.id,
             RecipientID=new_request.RecipientID,
             amount_of_meals=new_request.amount_of_meals,
-            request_date=new_request.request_date
+            request_date=new_request.request_date.isoformat() if new_request.request_date else None
         )
 
         return jsonify(request_dto.__dict__), 201
@@ -50,7 +62,7 @@ def get_all_recipient_requests():
                 id=req.id,
                 RecipientID=req.RecipientID,
                 amount_of_meals=req.amount_of_meals,
-                request_date=req.request_date
+                request_date=req.request_date.isoformat() if req.request_date else None
             ).__dict__ for req in all_requests
         ]
 

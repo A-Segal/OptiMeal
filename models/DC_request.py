@@ -9,4 +9,5 @@ class DC_Request(Base):
     DistributionCenterID = Column(Integer, ForeignKey('DistributionCenter.id'), nullable=False)
     amount_of_meals = Column(Integer, nullable=False)
     request_date = Column(DateTime, nullable=False)
+    type = Column(Integer, default=0)
     freshness_priority = Column(Integer, default=0)

@@ -114,6 +114,20 @@ def update_distribution_center(center_id):
         repo = DistributionCenterRepository(db_session)
         data = request.get_json()
 
+        lat = data.get('location_lat')
+        lng = data.get('location_lng')
+
+        # אם נשלחה כתובת טקסט — geocode
+        if data.get('address'):
+            geo = geocode_address(data['address'])
+            if "error" in geo:
+                return jsonify({'error': f"הכתובת לא נמצאה: {data['address']}"}), 400
+            lat = geo['lat']
+            lng = geo['lng']
+
+        if lat is None or lng is None:
+            return jsonify({'error': 'חסרים קואורדינטות. נא להזין כתובת תקינה.'}), 400
+
         updated = repo.update_distribution_center(
             centerID=center_id,
             fname=data.get('fname'),
@@ -122,8 +136,8 @@ def update_distribution_center(center_id):
             password=data.get('password'),
             mail=data.get('mail'),
             phone=data.get('phone'),
-            location_lat=data.get('location_lat'),
-            location_lng=data.get('location_lng')
+            location_lat=lat,
+            location_lng=lng
         )
 
         if not updated:

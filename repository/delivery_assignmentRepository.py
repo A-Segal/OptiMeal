@@ -3,6 +3,8 @@ from models.delivery_assignment import DeliveryAssignment
 from models.distribution_center import DistributionCenter
 from models.distribution_center import DistributionCenter
 from models.recipient import Recipient
+from datetime import date
+from repository.recipient_request_repository import RecipientRequestRepository
 
 
 class DeliveryAssignmentRepository:
@@ -44,6 +46,38 @@ class DeliveryAssignmentRepository:
 
     def get_all_delivery_assignments(self):
         return self.db.query(DeliveryAssignment).all()
+
+    def get_relevant_assignments_for_today(self):
+        today = date.today()
+
+        recipient_request_repo = RecipientRequestRepository(self.db)
+        requests = recipient_request_repo.get_all_requests()
+        today_recipient_ids = {
+            request_obj.RecipientID
+            for request_obj in requests
+            if request_obj.request_date and request_obj.request_date.date() == today
+        }
+
+        if not today_recipient_ids:
+            return []
+
+        return (
+            self.db.query(DeliveryAssignment)
+            .filter(DeliveryAssignment.DistributionCenterID.isnot(None))
+            .filter(DeliveryAssignment.RecipientID.isnot(None))
+            .filter(DeliveryAssignment.RecipientID.in_(today_recipient_ids))
+            .all()
+        )
+
+    def delete_all_delivery_assignments(self) -> int:
+        deleted_count = self.db.query(DeliveryAssignment).delete(synchronize_session=False)
+        self.db.commit()
+        return deleted_count
+
+    def has_unassigned_assignments(self) -> bool:
+        return self.db.query(DeliveryAssignment.id)\
+            .filter(DeliveryAssignment.VolunteerID.is_(None))\
+            .first() is not None
 
     # =========================
     # UPDATE (IMPORTANT FOR ALGO 2)
@@ -162,7 +196,7 @@ class DeliveryAssignmentRepository:
                     "center_id": key,
                     "center_lat": float(center.location_lat),
                     "center_lng": float(center.location_lng),
-                    "center_name": center.fname or f"מרכז חלוקה #{key}",
+                    "center_name": center.lname or center.fname or f"מרכז חלוקה #{key}",
                     "recipients_locations": [],
                     "recipient_names": [],
                     "recipient_meals": [],
@@ -176,9 +210,8 @@ class DeliveryAssignmentRepository:
                 "lng": float(recipient.location_lng)
             })
 
-            # ⭐ שמות וכמויות — המתנדב יודע למי וכמה
-            recipient_full_name = f"{recipient.fname or ''} {recipient.lname or ''}".strip() or f"משפחה #{recipient.id}"
-            groups[key]["recipient_names"].append(recipient_full_name)
+            recipient_family_name = (recipient.lname or recipient.fname or "").strip() or f"משפחה #{recipient.id}"
+            groups[key]["recipient_names"].append(recipient_family_name)
             groups[key]["recipient_meals"].append(r.amount_of_meals or 0)
 
             groups[key]["assignment_ids"].append(r.id)
