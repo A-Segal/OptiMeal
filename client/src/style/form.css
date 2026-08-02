@@ -1,0 +1,796 @@
+/* ============================================================
+   עזר מציון — SignUp & Login Forms (Red & White / Premium)
+   Brand: Deep Crimson #C8102E / Bright Red #E6344A
+   Shared by: Login, RecipientSignUp, DistributionCenterSignUp, VolunteerSignUp
+   ============================================================ */
+
+/* ===== CSS Variables ===== */
+:root {
+  --ez-red: #9e1515;
+  --ez-red-bright: #7a0c0c;
+  --ez-red-dark: #5a0a0a;
+  --ez-red-deeper: #3d0505;
+  --ez-red-light: rgba(122, 12, 12, 0.10);
+  --ez-red-glow: rgba(122, 12, 12, 0.22);
+  --ez-white: #FFFFFF;
+  --ez-cream: #FFF5F5;
+  --ez-gray-50: #FAFAFA;
+  --ez-gray-100: #F5F5F5;
+  --ez-gray-300: #D5D5D5;
+  --ez-gray-400: #A0A0A0;
+  --ez-gray-500: #707070;
+  --ez-gray-700: #3A3A3A;
+  --ez-gray-900: #1A1A1A;
+  --ez-radius: 16px;
+  --ez-radius-lg: 28px;
+  --ez-transition: 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ============================================================
+   WRAPPER — dramatic red-on-white background
+   ============================================================ */
+.recipient-signup-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+
+  background:
+    radial-gradient(ellipse 70% 50% at 30% -5%, rgba(122, 12, 12, 0.14) 0%, transparent 50%),
+    radial-gradient(ellipse 55% 45% at 75% 90%, rgba(122, 12, 12, 0.10) 0%, transparent 45%),
+    linear-gradient(170deg, var(--ez-cream) 0%, #FFF0F0 25%, var(--ez-white) 60%, #FFF3F3 100%);
+
+  position: relative;
+  overflow: hidden;
+}
+
+/* Dot pattern — red dots */
+.recipient-signup-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.40;
+  background-image:
+    radial-gradient(rgba(122, 12, 12, 0.13) 1.5px, transparent 1.5px),
+    radial-gradient(rgba(122, 12, 12, 0.07) 1px, transparent 1px);
+  background-size: 26px 26px, 40px 40px;
+  background-position: 0 0, 13px 13px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Floating red decorative orb */
+.recipient-signup-wrap::after {
+  content: "";
+  position: absolute;
+  width: 450px;
+  height: 450px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(122, 12, 12, 0.09) 0%, transparent 70%);
+  top: -120px;
+  right: -100px;
+  pointer-events: none;
+  z-index: 0;
+  animation: orbFloat 9s ease-in-out infinite;
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-25px, 18px) scale(1.07); }
+  66% { transform: translate(12px, -8px) scale(0.95); }
+}
+
+/* ============================================================
+   CARD — glass, compact, red accent
+   ============================================================ */
+.recipient-signup-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 650px;
+
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.97) 0%,
+    rgba(255, 247, 247, 0.93) 35%,
+    rgba(255, 245, 245, 0.94) 100%
+  );
+
+  border: 1.5px solid rgba(122, 12, 12, 0.16);
+  border-radius: var(--ez-radius-lg);
+  padding: 34px 34px 30px;
+
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.03),
+    0 14px 44px rgba(122, 12, 12, 0.10),
+    0 32px 72px rgba(139, 0, 0, 0.08);
+
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+
+  transition:
+    transform var(--ez-transition),
+    box-shadow var(--ez-transition);
+
+  animation: cardSlideUp 0.75s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.recipient-signup-card-header {
+  position: relative;
+  padding-inline-start: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.recipient-signup-exit {
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid rgba(122, 12, 12, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ez-red-dark);
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(122, 12, 12, 0.10);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.recipient-signup-exit:hover {
+  transform: translateY(-1px);
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(122, 12, 12, 0.14);
+}
+
+/* Animated shimmering red accent bar */
+.recipient-signup-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 4px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(
+    90deg,
+    var(--ez-red-dark) 0%,
+    var(--ez-red-bright) 50%,
+    var(--ez-red-dark) 100%
+  );
+  background-size: 200% 100%;
+  opacity: 0.85;
+  animation: accentShimmer 4s ease-in-out infinite;
+}
+
+@keyframes accentShimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Corner glow */
+.recipient-signup-card::after {
+  content: "";
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(122, 12, 12, 0.07) 0%, transparent 70%);
+  bottom: -50px;
+  left: -50px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.recipient-signup-card:hover {
+  transform: translateY(-6px);
+  box-shadow:
+    0 8px 14px rgba(0, 0, 0, 0.04),
+    0 20px 60px rgba(122, 12, 12, 0.14),
+    0 40px 90px rgba(139, 0, 0, 0.10);
+}
+
+@keyframes cardSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Page logo — Ezer Mitzion */
+.page-logo {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 14px;
+  display: block;
+  border-radius: 22px;
+  object-fit: cover;
+  background: #fff;
+  border: 1px solid rgba(122, 12, 12, 0.12);
+  box-shadow: 0 12px 28px rgba(122, 12, 12, 0.16), 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+/* ============================================================
+   HEADER — compact but bold
+   ============================================================ */
+.recipient-signup-header {
+  margin-bottom: 22px;
+  text-align: center;
+  animation: headerFadeIn 0.65s 0.12s ease-out both;
+}
+
+@keyframes headerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.recipient-signup-header .eyebrow {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 6px 20px;
+
+  color: var(--ez-red-dark);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+
+  background: linear-gradient(135deg, rgba(122, 12, 12, 0.12), rgba(122, 12, 12, 0.05));
+  border: 1.5px solid rgba(122, 12, 12, 0.20);
+  border-radius: 999px;
+
+  box-shadow: 0 2px 10px rgba(122, 12, 12, 0.06);
+}
+
+.recipient-signup-header h2 {
+  margin: 0;
+  font-size: 29px;
+  font-weight: 900;
+  line-height: 1.12;
+
+  background: linear-gradient(
+    155deg,
+    var(--ez-red-deeper) 0%,
+    var(--ez-red-dark) 30%,
+    var(--ez-red-bright) 70%,
+    var(--ez-red) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+
+  letter-spacing: -0.8px;
+}
+
+.recipient-signup-header p {
+  margin: 10px auto 0;
+  color: var(--ez-gray-500);
+  font-size: 13.5px;
+  line-height: 1.5;
+  max-width: 400px;
+}
+
+.recipient-signup-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.recipient-signup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recipient-signup-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ez-red-dark);
+  letter-spacing: 0.02em;
+}
+
+.recipient-signup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.recipient-signup-grid .recipient-signup-field--full {
+  grid-column: 1 / -1;
+}
+
+.recipient-signup-grid .recipient-signup-field,
+.recipient-signup-layout .recipient-signup-field {
+  min-width: 0;
+}
+
+.recipient-signup-grid .recipient-signup-field input,
+.recipient-signup-grid .dropdown-btn {
+  width: 100%;
+}
+
+/* ============================================================
+   FORM — single column, elegant flow
+   ============================================================ */
+.recipient-signup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  animation: fieldsStagger 0.55s 0.28s ease-out both;
+}
+
+@keyframes fieldsStagger {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================
+   FIELDS
+   ============================================================ */
+.recipient-signup-field {
+  display: grid;
+  gap: 6px;
+}
+
+.recipient-signup-field label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ez-gray-700);
+  letter-spacing: 0.02em;
+  padding-inline-start: 2px;
+}
+
+.recipient-signup-field input,
+.dropdown-btn {
+  box-sizing: border-box;
+}
+
+/* Inputs */
+.recipient-signup-field input {
+  width: 100%;
+  min-height: 46px;
+
+  border-radius: 14px;
+  border: 2px solid rgba(122, 12, 12, 0.10);
+
+  padding: 0 16px;
+  font-size: 13.5px;
+  font-family: inherit;
+
+  background: linear-gradient(180deg, var(--ez-white) 0%, #FFFDFD 100%);
+  color: var(--ez-gray-900);
+
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.03),
+    0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.recipient-signup-field input:hover {
+  border-color: rgba(122, 12, 12, 0.22);
+  background: linear-gradient(180deg, var(--ez-white) 0%, #FFF5F5 100%);
+}
+
+.recipient-signup-field input:focus {
+  outline: none;
+  border-color: var(--ez-red);
+  background: var(--ez-white);
+  box-shadow:
+    0 0 0 5px rgba(122, 12, 12, 0.13),
+    0 0 18px rgba(122, 12, 12, 0.08),
+    0 3px 10px rgba(122, 12, 12, 0.08);
+  transform: translateY(-2px);
+}
+
+.recipient-signup-field input::placeholder {
+  color: var(--ez-gray-400);
+  font-weight: 400;
+}
+
+.recipient-signup-field input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--ez-gray-50);
+  transform: none;
+}
+
+/* ============================================================
+   MESSAGES
+   ============================================================ */
+.recipient-signup-message {
+  padding: 12px 18px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  animation: msgSlideIn 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes msgSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.recipient-signup-message.error {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.10), rgba(239, 68, 68, 0.04));
+  color: #B91C1C;
+  border: 1.5px solid rgba(239, 68, 68, 0.22);
+  box-shadow: 0 3px 14px rgba(239, 68, 68, 0.07);
+}
+
+.recipient-signup-message.success {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(34, 197, 94, 0.04));
+  color: #15803D;
+  border: 1.5px solid rgba(34, 197, 94, 0.22);
+  box-shadow: 0 3px 14px rgba(34, 197, 94, 0.07);
+}
+
+/* Submit */
+.recipient-signup-submit {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.recipient-signup-submit--left {
+  justify-content: flex-start;
+}
+
+/* ============================================================
+   SUBMIT BUTTON — dramatic red, animated
+   ============================================================ */
+.recipient-signup-submit button {
+  width: fit-content;
+  min-width: 168px;
+  max-width: 100%;
+
+  padding: 12px 22px;
+  border-radius: 999px;
+  border: none;
+
+  font-size: 15px;
+  font-weight: 800;
+  font-family: inherit;
+  color: var(--ez-white);
+  letter-spacing: 0.04em;
+
+  background: linear-gradient(
+    135deg,
+    var(--ez-red-bright) 0%,
+    var(--ez-red) 30%,
+    var(--ez-red-dark) 70%,
+    var(--ez-red-deeper) 100%
+  );
+  background-size: 200% 200%;
+  cursor: pointer;
+
+  box-shadow:
+    0 8px 30px rgba(122, 12, 12, 0.35),
+    0 2px 8px rgba(122, 12, 12, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+
+  position: relative;
+  overflow: hidden;
+
+  transition:
+    transform var(--ez-transition),
+    box-shadow var(--ez-transition),
+    background-position var(--ez-transition);
+
+  animation: btnPulse 2.5s ease-in-out infinite;
+}
+
+.recipient-signup-submit--secondary button {
+  background: linear-gradient(135deg, var(--ez-gray-700) 0%, var(--ez-gray-900) 100%);
+  box-shadow: 0 8px 24px rgba(26, 26, 26, 0.18), 0 2px 8px rgba(26, 26, 26, 0.10);
+}
+
+/* Shimmer sweep */
+.recipient-signup-submit button::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.14) 40%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.14) 60%,
+    transparent 100%
+  );
+  animation: shimmer 3.2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  35%, 100% { left: 160%; }
+}
+
+@keyframes btnPulse {
+  0%, 100% {
+    box-shadow:
+      0 8px 30px rgba(122, 12, 12, 0.35),
+      0 2px 8px rgba(122, 12, 12, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  }
+  50% {
+    box-shadow:
+      0 16px 45px rgba(122, 12, 12, 0.50),
+      0 4px 16px rgba(122, 12, 12, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  }
+}
+
+.recipient-signup-submit button:hover {
+  transform: translateY(-4px) scale(1.03);
+  background-position: 100% 50%;
+  box-shadow:
+    0 20px 50px rgba(122, 12, 12, 0.50),
+    0 5px 16px rgba(122, 12, 12, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20);
+}
+
+.recipient-signup-submit button:active {
+  transform: translateY(0) scale(0.96);
+  box-shadow:
+    0 5px 18px rgba(122, 12, 12, 0.30),
+    0 2px 6px rgba(122, 12, 12, 0.14);
+}
+
+.recipient-signup-submit button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  animation: none;
+  transform: none;
+}
+
+/* ============================================================
+   CUSTOM DROPDOWN
+   ============================================================ */
+.custom-dropdown {
+  position: relative;
+}
+
+.dropdown-btn {
+  position: relative;
+  width: 100%;
+  min-height: 46px;
+
+  border-radius: 14px;
+  border: 2px solid rgba(122, 12, 12, 0.10);
+
+  background: linear-gradient(180deg, var(--ez-white) 0%, #FFFDFD 100%);
+  color: var(--ez-gray-900);
+
+  padding: 0 40px 0 16px;
+  font-size: 13.5px;
+  font-family: inherit;
+
+  text-align: right;
+  cursor: pointer;
+
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.03),
+    0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.dropdown-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--ez-gray-50);
+}
+
+/* Chevron arrow */
+.dropdown-btn::after {
+  content: "▾";
+  position: absolute;
+  inset-inline-start: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ez-red);
+  font-size: 13px;
+  font-weight: bold;
+  pointer-events: none;
+  transition: transform 0.2s ease;
+}
+
+.dropdown-btn:hover {
+  border-color: rgba(122, 12, 12, 0.22);
+  background: linear-gradient(180deg, var(--ez-white) 0%, #FFF5F5 100%);
+}
+
+.dropdown-btn:focus {
+  outline: none;
+  border-color: var(--ez-red);
+  box-shadow:
+    0 0 0 5px rgba(122, 12, 12, 0.13),
+    0 0 18px rgba(122, 12, 12, 0.08),
+    0 3px 10px rgba(122, 12, 12, 0.08);
+}
+
+.dropdown-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--ez-gray-50);
+}
+
+/* Dropdown menu */
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+
+  background: var(--ez-white);
+  border-radius: 14px;
+  border: 1.5px solid rgba(122, 12, 12, 0.14);
+
+  box-shadow:
+    0 14px 44px rgba(0, 0, 0, 0.12),
+    0 3px 10px rgba(0, 0, 0, 0.05);
+
+  overflow: hidden;
+  z-index: 50;
+
+  animation: dropdownAppear 0.20s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes dropdownAppear {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dropdown-menu div {
+  padding: 12px 16px;
+  cursor: pointer;
+
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ez-gray-900);
+
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    padding-inline-start 0.18s ease;
+
+  border-bottom: 1px solid var(--ez-gray-100);
+}
+
+.dropdown-menu div:last-child {
+  border-bottom: none;
+}
+
+.dropdown-menu div:hover {
+  background: linear-gradient(90deg, rgba(122, 12, 12, 0.10), rgba(122, 12, 12, 0.03));
+  color: var(--ez-red-dark);
+  padding-inline-start: 24px;
+}
+
+.dropdown-menu div:active {
+  background: rgba(122, 12, 12, 0.15);
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 720px) {
+  .recipient-signup-wrap {
+    padding: 18px 12px;
+    align-items: flex-start;
+    padding-top: 30px;
+  }
+
+  .recipient-signup-card {
+    padding: 28px 20px 24px;
+    border-radius: 24px;
+  }
+
+  .recipient-signup-exit {
+    width: 38px;
+    height: 38px;
+  }
+
+  .recipient-signup-card::before {
+    left: 12px;
+    right: 12px;
+    height: 3px;
+  }
+
+  .recipient-signup-header h2 {
+    font-size: 26px;
+  }
+
+  .recipient-signup-header p {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 540px) {
+  .recipient-signup-form {
+    gap: 16px;
+  }
+
+  .recipient-signup-card {
+    padding: 24px 16px 20px;
+    border-radius: 22px;
+  }
+
+  .page-logo {
+    width: 78px;
+    height: 78px;
+  }
+
+  .recipient-signup-card::before {
+    left: 10px;
+    right: 10px;
+    height: 3px;
+  }
+
+  .recipient-signup-header .eyebrow {
+    font-size: 11px;
+    padding: 5px 15px;
+  }
+
+  .recipient-signup-field input,
+  .dropdown-btn {
+    min-height: 42px;
+    border-radius: 13px;
+  }
+
+  .recipient-signup-submit button {
+    min-width: 160px;
+    padding: 12px 20px;
+  }
+
+  .recipient-signup-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}

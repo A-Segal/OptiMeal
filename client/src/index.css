@@ -1,0 +1,24 @@
+/* ===== Reset & Base ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  direction: rtl;
+  font-family: "Frank Ruhl Libre", "Assistant", "Segoe UI", Arial, serif;
+  color: #111827;
+  background: #ffffff;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
