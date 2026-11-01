@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@react-google-maps/api": "^2.20.8",
+    "axios": "^1.17.0"
+  }
+}
