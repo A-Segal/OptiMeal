@@ -111,6 +111,36 @@ Signup forms for `RecipientSignUp` and `DistributionCenterSignUp` use `@react-go
 ### Components Not Yet Integrated
 `RunMatchingButton` and `DownloadAssignmentsButton` exist in `src/components/` but are not yet placed on any dashboard. They call the backend matching and assignment endpoints. `DC_Request` form is also available but not yet routed into the DC dashboard.
 
+### Daily matching is automatic (server-side)
+
+The recipient→center matching now runs **automatically every day at 22:00**
+(Asia/Jerusalem) inside the Flask process, for **tomorrow's** service date. No
+client action is needed.
+
+`StaffHome.tsx` still exposes a button that POSTs to
+`/delivery_assignment/run_matching`, but it is a **development/testing aid
+only** — it calls the exact same business operation the scheduler calls, so it
+produces identical results. It may return `409` if a run for that date is
+already in progress.
+
+**Date fields the client must not rely on:**
+
+| Field | Meaning |
+|---|---|
+| `request_date` | when the request was submitted — **not** the delivery date |
+| `service_date` | which delivery day the row belongs to |
+
+`request_date` is sent by the forms (`new Date()`) but the **server ignores it**
+on create — it stamps both dates itself. On `PUT`, neither field is accepted for
+update; `service_date` may be changed explicitly for staff reassignment (format
+`YYYY-MM-DD`).
+
+`POST /recipient_request` and `POST /dc_requests` responses now include
+**`service_date`** in addition to `request_date`. The dashboard summary at
+`GET /staff_member/dashboard_summary` returns `service_date` per row, and groups
+assignments by service date — so "today" and "tomorrow" sections never show each
+other's rows.
+
 ### Key Imports Pattern
 Signup components import from `../../style/form.css` (relative, since they're in `src/components/signUp/`).
 Main components import from `../style/Home.css` or `../style/DCHme.css`.
@@ -128,7 +158,11 @@ Main components import from `../style/Home.css` or `../style/DCHme.css`.
 2. Convert `DCHme.css` from dark theme to light Ezer Mitzion style
 3. Style `VolunteerHome` and `RecipientHome` (currently plain text with inline styles)
 4. Integrate `RunMatchingButton`, `DownloadAssignmentsButton`, and `DC_Request` into dashboards
+   — note: the matching itself is now automatic (see "Daily matching is automatic" above);
+   any button is a manual re-run/simulation only.
 5. Build the matching algorithm UI and VRP route visualization
 6. JWT/token-based auth instead of raw user object in localStorage
 7. Protected routes (redirect to login if no user in localStorage)
 8. Replace emoji card icons with proper SVG icons
+9. Show the next scheduled automatic run time in `StaffHome` (the backend exposes
+   `services.scheduler.get_next_run_time()`; no endpoint is wired to it yet)

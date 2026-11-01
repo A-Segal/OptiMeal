@@ -17,6 +17,14 @@ type StaffUser = {
 
 type MatchingResult = {
   created_count?: number;
+  total_requested_today?: number;
+  unassigned?: number;
+  unique_centers_used?: number;
+  target_date?: string;
+  service_date?: string;
+  recipient_requests_considered?: number;
+  dc_requests_considered?: number;
+  replaced_assignments?: number;
 };
 
 type RunMatchingApiResponse = Partial<MatchingResult> & { message?: string; error?: string };
@@ -29,7 +37,6 @@ type DashboardServiceRow = {
   meals: number;
   address: string | null;
   source_address: string | null;
-  request_date: string;
   service_date: string;
 };
 
@@ -87,8 +94,8 @@ type NewUserForm = {
 };
 
 const STEPS = [
-  "מנקה שיבוצים קודמים ומכין הרצה חדשה...",
-  "מסנן רק בקשות של היום עבור משלוח מחר...",
+  "מנקה את השיבוצים של מחר ומכין הרצה חדשה...",
+  "טוען בקשות מוטבים ובקשות מרכזים של היום עבור מחר...",
   "מחשב התאמות בין מוטבים למרכזים...",
   "יוצר שיבוצי חלוקה ומשימות משלוח...",
   "מייצר דוח מסכם...",
@@ -271,7 +278,10 @@ const StaffHome: React.FC = () => {
     try {
       const res = await fetch(`${base_url}/delivery_assignment/run_matching`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Permission": user?.permission || "",
+        },
       });
       const data: RunMatchingApiResponse = await res.json();
 
@@ -281,6 +291,14 @@ const StaffHome: React.FC = () => {
 
       setMatchingSummary({
         created_count: data.created_count ?? 0,
+        total_requested_today: data.total_requested_today ?? 0,
+        unassigned: data.unassigned ?? 0,
+        unique_centers_used: data.unique_centers_used ?? 0,
+        target_date: data.target_date,
+        service_date: data.service_date,
+        recipient_requests_considered: data.recipient_requests_considered ?? 0,
+        dc_requests_considered: data.dc_requests_considered ?? 0,
+        replaced_assignments: data.replaced_assignments ?? 0,
       });
 
       await loadDashboard();
@@ -374,10 +392,18 @@ const StaffHome: React.FC = () => {
               <section className="sh-admin-panel sh-admin-results">
                 <div className="sh-admin-results-head">
                   <div>
-                    <h2>הרצת שיבוץ</h2>
-                    <p>הפעלת מערכת השיבוץ האוטומטית — התאמת מוטבים למרכזי חלוקה לפי קרבה גאוגרפית וכמות מנות.</p>
+                    <h2>שיבוץ אוטומטי</h2>
+                    <p>המערכת משייכת מוטבים למרכזי חלוקה לפי קרבה גאוגרפית וכמות מנות. התהליך מתבצע מעצמו, ללא צורך בפעולה ידנית.</p>
                   </div>
                 </div>
+
+                <div className="sh-admin-notice">
+                  <span>
+                    שיבוץ אוטומטי מתבצע בכל יום בשעה 22:00 עבור בקשות ליום המחרת.
+                  </span>
+                </div>
+
+                {resultErr && <div className="sh-admin-alert">{resultErr}</div>}
 
                 {matchingSummary && !running && (
                   <div className="sh-run-result">
@@ -386,13 +412,30 @@ const StaffHome: React.FC = () => {
                   </div>
                 )}
 
-                <div className="sh-admin-action-area">
-                  <div className="sh-admin-action-copy">
-                    <h3>הפעלת שיבוץ</h3>
-                    <p>לחיצה על הכפתור תתחיל תהליך התאמה אוטומטי בין מוטבים למרכזי חלוקה.</p>
+                {matchingSummary && !running && (
+                  <div className="sh-run-detail">
+                    {matchingSummary.target_date && (
+                      <span>תאריך שירות: {formatDate(matchingSummary.target_date)}</span>
+                    )}
+                    <span>בקשות מוטבים: {matchingSummary.recipient_requests_considered ?? 0}</span>
+                    <span>בקשות מרכזים: {matchingSummary.dc_requests_considered ?? 0}</span>
+                    <span>שיבוצים שהוחלפו: {matchingSummary.replaced_assignments ?? 0}</span>
+                    <span>מוטבים שלא שובצו: {matchingSummary.unassigned ?? 0}</span>
+                    <span>מרכזים שנעשה בהם שימוש: {matchingSummary.unique_centers_used ?? 0}</span>
                   </div>
-                  <button className="sh-admin-run sh-admin-run--primary" onClick={() => void runMatching()} disabled={running}>
-                    {running ? "משבץ..." : "הרץ שיבוץ"}
+                )}
+
+                <div className="sh-admin-simulate">
+                  <div className="sh-admin-simulate-copy">
+                    <h3>בדיקה ידנית</h3>
+                    <p>הרצה חד-פעמית של השיבוץ עבור מחר, לצורכי פיתוח ובדיקה בלבד. הפעולה זהה לחלוטין לזו שהמערכת מריצה אוטומטית בשעה 22:00.</p>
+                  </div>
+                  <button
+                    className="sh-admin-run sh-admin-run--secondary"
+                    onClick={() => void runMatching()}
+                    disabled={running}
+                  >
+                    {running ? "משבץ..." : "הפעל שיבוץ למחר – בדיקה"}
                   </button>
                 </div>
               </section>
@@ -425,7 +468,7 @@ const StaffHome: React.FC = () => {
                     </thead>
                     <tbody>
                       {todayAssignedRows.length ? todayAssignedRows.map((row) => (
-                        <tr key={`today-${row.recipient_id}-${row.request_date}`}>
+                        <tr key={`today-${row.recipient_id}-${row.service_date}`}>
                           <td>{row.recipient_username || `user_${row.recipient_id}`}</td>
                           <td>{row.center_username || "-"}</td>
                           <td>{row.meals}</td>
@@ -471,7 +514,7 @@ const StaffHome: React.FC = () => {
                     </thead>
                     <tbody>
                       {tomorrowAssignedRows.length ? tomorrowAssignedRows.map((row) => (
-                        <tr key={`tomorrow-${row.recipient_id}-${row.request_date}`}>
+                        <tr key={`tomorrow-${row.recipient_id}-${row.service_date}`}>
                           <td>{row.recipient_username || `user_${row.recipient_id}`}</td>
                           <td>{row.center_username || "-"}</td>
                           <td>{row.meals}</td>
